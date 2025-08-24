@@ -1,43 +1,28 @@
-bits 16
-cpu 8086
+org 100h
 
-segment code
+menu_loop:
+    mov ah, 09h
+    lea dx, menuMsg
+    int 21h
 
-..start:
-	mov ax,data
-	mov ds,ax
-	mov ax,stack
-	mov ss,ax
-	mov sp,stacktop
+    mov ah, 01h
+    int 21h
 
-	call sayHello
+    cmp al, '1'
+    je say_hola
+    cmp al, '2'
+    je exit_program
+    jmp menu_loop
 
-exit:
-	mov ah,04CH
-	mov al,00
-	int 21h
+say_hola:
+    mov ah, 09h
+    mov dx, holaMsg
+    int 21h
+    jmp menu_loop
 
-sayHello:
-	push ax
-	push dx
+exit_program:
+    mov ah, 4Ch
+    int 21h
 
-	mov ah, 09h
-	mov dx,msg_hello
-	int 21h
-
-	mov ah, 09h
-	mov dx,msg_hello2
-	int 21h
-
-	pop dx
-	pop ax
-	ret
-
-segment data
-
-msg_hello: db `hello\r\n$`
-msg_hello2: db `Hello2\r\n$`
-
-segment stack stack
-	resb 1024
-stacktop:
+menuMsg db 13,10,'Menu:',13,10,'1. Hola',13,10,'2. Exit',13,10,'$'
+holaMsg db 13,10,'Hola!',13,10,'$'
