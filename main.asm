@@ -1,28 +1,130 @@
+; menu.asm - NASM .COM menu para tarea Assembly 8086
 org 100h
 
 menu_loop:
+    ; mostrar menu
     mov ah, 09h
     lea dx, menuMsg
     int 21h
 
+    ; leer opcion, esta luego es almacenada en AL
     mov ah, 01h
     int 21h
-
+    
+    ; comparar numero de entrada
     cmp al, '1'
-    je say_hola
+    je ingreso_loop    
+    
     cmp al, '2'
+    je mostrar_estads    
+    
+    cmp al, '3'
+    je buscar_estud   
+    
+    cmp al, '4'
+    je ordenar_calif
+    
+    cmp al, '5'
     je exit_program
-    jmp menu_loop
+    
+    jmp menu_loop  
+  
+  
+  
+; ------------------------
+; 1. Ingreso de Estudiante
+; ------------------------
+ingreso_loop:   ; Loop para seguir ingresando estudiantes  
 
-say_hola:
+    ; Mostrar mensaje de instruccion
     mov ah, 09h
-    mov dx, holaMsg
+    lea dx, ingreseMsg
+    int 21h
+    
+    ; Leer cadena
+    lea dx, datosIngreso; Lea e ingrese en datosIngreso
+    mov ah, 0Ah ; Leer datos de teclado hasta presionar Enter y guardar en AL, dado por el formato de datosIngreso
+    int 21h
+
+    ; Revisar si fue '9'
+    mov al, [datosIngreso+2]   ; primer caracter ingresado, ya que la estructura de datosIngreso
+    ; indica que el primer caracter del string esta en Byte 2.
+    cmp al, '9' ; Verifica si AL tiene 9 
+    
+    
+    ; salto de linea
+    mov ah, 02h  ; Escribir un solo caracter en la salida estandar
+    mov dl, 0Dh  ; Se carga 0Dh en DL, Carriage Return, devuelve al inicio de linea actual  
+    int 21h      
+    mov ah, 02h  ; Escribir un solo carácter en la salida estandar
+    mov dl, 0Ah  ; Se carga 0Ah que es Avance de Linea, avanza siguiente fila
+    int 21h  
+    
+    je menu_loop ; Se ejecuta solo si AL tiene 9
+    
+    
+    ; Confirmar dato
+    mov ah, 09h
+    lea dx, confirmMsg
+    int 21h
+
+    jmp ingreso_loop   ; Seguir pidiendo hasta que presione '9'
+
+; ------------------------
+; 2. Mostrar Estadisticas
+; ------------------------  
+mostrar_estads:
+    mov ah, 09h
+    lea dx, estadsMsg
+    int 21h
+    jmp menu_loop
+  
+; ------------------------
+; 3. Buscar Estudiante
+; ------------------------
+
+buscar_estud:
+    mov ah, 09h
+    lea dx, buscarMsg
     int 21h
     jmp menu_loop
 
+
+; -------------------------
+; 4. Ordenar Calificaciones
+; -------------------------
+ordenar_calif:
+    mov ah, 09h
+    lea dx, ordenarMsg
+    int 21h
+    jmp menu_loop
+  
+  
+  
+; ------------------------
+; 5. Salir
+; ------------------------
 exit_program:
     mov ah, 4Ch
-    int 21h
+    int 21h   
 
-menuMsg db 13,10,'Menu:',13,10,'1. Hola',13,10,'2. Exit',13,10,'$'
-holaMsg db 13,10,'Hola!',13,10,'$'
+; ------------------------
+; Datos
+; ------------------------
+menuMsg db "Seleccione una opcion por ejecutar:",13,10
+     db "1. Ingrese calificacion.",13,10
+     db "2. Mostrar estadisticas",13,10
+     db "3. Buscar estudiantes (indice)",13,10
+     db "4. Ordenar calificaciones",13,10
+     db "5. Salir",13,10,'$'
+     
+ingreseMsg db 13,10,'Por favor ingrese su estudiante o digite 9 para salir al menu principal.',13,10,'$' 
+estadsMsg db 13,10,'Se van a mostrar estadisticas de calificaciones. Presione Enter o digite 9 para salir al menu principal.',13,10,'$'
+buscarMsg db 13,10,'Se desea buscar un estudiante por medio de indice de ubicaion. Digite el indie y presiones enter o digite 9 para salir al menu principal.',13,10,'$' 
+ordenarMsg db 13,10,'Se desean ordenar las calificaciones. Presione Enter o digite 9 para salir al menu principal.',13,10,'$' 
+confirmMsg db 13,10,'Dato recibido.',13,10,'$'  
+  
+datosIngreso db 50       ; 1. Byte 0: Capacidad Maxima
+            db ?         ; 2. Byte 1: Longitud Real (la llena DOS)
+            db 50 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
+; TODO
