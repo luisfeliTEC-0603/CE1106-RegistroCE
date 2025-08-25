@@ -1,0 +1,70 @@
+>> RegitroCE.exe
+
+Bienvenidos a RegistroCE
+Digite:
+
+1.	Ingresar calificaciones (hasta 15 estudiantes -Nombre Apellido1 Apellido2 Nota-).
+2.	Mostrar estadísticas.
+3.	Buscar estudiante por posición (índice).
+4.	Ordenar calificaciones (ascendente/descendente).
+5.	Salir.
+
+1
+Por favor ingrese su estudiante o digite 9 para salir al menu principal
+Marco Rivera Meneses 92.07657
+Por favor ingrese su estudiante o digite 9 para salir al menu principal
+Pedro Perico 80
+Por favor ingrese su estudiante o digite 9 para salir al menu principal
+9
+1.	Ingresar calificaciones (hasta 15 estudiantes -Nombre Apellido1 Apellido2 Nota-).
+2.	Mostrar estadísticas.
+3.	Buscar estudiante por posición (índice).
+4.	Ordenar calificaciones (ascendente/descendente).
+5.	Salir.
+
+2
+Promedio 86.xxxxx
+Maxima 92.07657
+Minima 80
+Aprobados Cantidad 2 Porcentaje 100%
+Reprobados Cantidad 0 Porcentaje 0%
+
+Digite:
+1.	Ingresar calificaciones (hasta 15 estudiantes -Nombre Apellido1 Apellido2 Nota-).
+2.	Mostrar estadísticas.
+3.	Buscar estudiante por posición (índice).
+4.	Ordenar calificaciones (ascendente/descendente).
+5.	Salir.
+
+3
+Que estudiante desea mostrar 
+1
+Marco Rivera Meneses 92.07657
+
+Digite:
+1.	Ingresar calificaciones (hasta 15 estudiantes -Nombre Apellido1 Apellido2 Nota-).
+2.	Mostrar estadísticas.
+3.	Buscar estudiante por posición (índice).
+4.	Ordenar calificaciones (ascendente/descendente).
+5.	Salir.
+
+4
+Como desea ordenar las calificaciones
+1. Asc
+2. Des
+
+2
+Marco Rivera 92.07657
+Pedro Perico 80
+
+Digite
+1.	Ingresar calificaciones (hasta 15 estudiantes -Nombre Apellido1 Apellido2 Nota-).
+2.	Mostrar estadísticas.
+3.	Buscar estudiante por posición (índice).
+4.	Ordenar calificaciones (ascendente/descendente).
+5.	Salir.
+
+5
+Gracias por usar Registro CE
+
+>>
