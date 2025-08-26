@@ -1,130 +1,396 @@
-; menu.asm - NASM .COM menu para tarea Assembly 8086
-org 100h
+.MODEL SMALL
+.STACK 100H
 
-menu_loop:
-    ; mostrar menu
-    mov ah, 09h
-    lea dx, menuMsg
-    int 21h
+.DATA
+indSize     EQU 30
+grdSize     EQU 10
+indMax      EQU 3
 
-    ; leer opcion, esta luego es almacenada en AL
-    mov ah, 01h
-    int 21h
-    
-    ; comparar numero de entrada
-    cmp al, '1'
-    je ingreso_loop    
-    
-    cmp al, '2'
-    je mostrar_estads    
-    
-    cmp al, '3'
-    je buscar_estud   
-    
-    cmp al, '4'
-    je ordenar_calif
-    
-    cmp al, '5'
-    je exit_program
-    
-    jmp menu_loop  
-  
-  
-  
-; ------------------------
-; 1. Ingreso de Estudiante
-; ------------------------
-ingreso_loop:   ; Loop para seguir ingresando estudiantes  
+indBuffer   DB indSize+2 DUP(0)
+grdBuffer   DB grdSize+2 DUP(0)
 
-    ; Mostrar mensaje de instruccion
-    mov ah, 09h
-    lea dx, ingreseMsg
-    int 21h
+indLst      DB indMax DUP(indSize+1 DUP('$'))
+grdLst      DB indMax DUP(grdSize+1 DUP('$'))
+
+cnt         DB 0
+
+; --- Msgs & Display Prompts ---
+msgMenu     DB 13, 10, '-------------< CE1106 - REGISTRATION >---------------', 13, 10
+            DB         '-----------------< MAIN MENU >-----------------------',  13, 10
+            DB         '| 1. Add Student and Grade                          |', 13, 10
+            DB         '| 2. Display Stats                                  |', 13, 10
+            DB         '| 3. Search Student with Index                      |', 13, 10 
+            DB         '| 4. Order Grades (ASC/DESC)                        |', 13, 10
+            DB         '| 5. Display Uploaded Data                          |', 13, 10
+            DB         '| 0. Exit Program                                   |', 13, 10
+            DB         '-----------------------------------------------------', 13, 10
+            DB         '                                                     ', 13, 10
+            DB         'Input: $'
+
+msgNombre DB 13, 10, 'Ingrese nombre completo: $'
+msgNota   DB 13, 10, 'Ingrese nota: $'
+msgLista  DB 13, 10, 'Lista de Estudiantes:', 13, 10, '-------------------', 13, 10, '$'
+msgEncabezado DB 'No.  Nombre', 9,9,'Nota$'  ; Mejorado
+msgSeparador DB 13, 10, '----------------------------------------', 13, 10, '$'
+newline   DB 13, 10, '$'
+tab       DB 09h, '$'
+
+msgOpcionInvalida DB 13, 10, 'Opcion invalida! Presione cualquier tecla...$'
+msgMaxAlcanzado DB 13, 10, 'Maximo de estudiantes alcanzado!$'
+msgPresioneTecla DB 13, 10, 'Presione cualquier tecla para continuar...$'
+
+.CODE
+START:
+    MOV AX, @DATA
+    MOV DS, AX
+    MOV ES, AX
+
+MainMenu:
+    CALL ClrScreen
+    CALL MostrarMenu
+    JMP MainMenu
+
+MostrarMenu PROC
+    MOV AH, 09h
+    LEA DX, msgMenu
+    INT 21h
+
+    MOV AH, 01h
+    INT 21h
+
+    CMP AL, '1'
+    JE Opcion1
+    CMP AL, '2'
+    JE Opcion2
+    CMP AL, '3'
+    JE Opcion3
+    CMP AL, '4'
+    JE Opcion4
+    CMP AL, '5'
+    JE Opcion5
+    CMP AL, '0'
+    JE SalirPrograma
+    CMP AL, 1Bh
+    JE SalirPrograma
     
-    ; Leer cadena
-    lea dx, datosIngreso; Lea e ingrese en datosIngreso
-    mov ah, 0Ah ; Leer datos de teclado hasta presionar Enter y guardar en AL, dado por el formato de datosIngreso
-    int 21h
+    MOV AH, 09h
+    LEA DX, msgOpcionInvalida
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+MostrarMenu ENDP
 
-    ; Revisar si fue '9'
-    mov al, [datosIngreso+2]   ; primer caracter ingresado, ya que la estructura de datosIngreso
-    ; indica que el primer caracter del string esta en Byte 2.
-    cmp al, '9' ; Verifica si AL tiene 9 
+Opcion1:
+    CALL AgregarEstudiante
+    RET
+
+Opcion2:
+    CALL MostrarEstadisticas
+    RET
+
+Opcion3:
+    CALL BuscarEstudiante
+    RET
+
+Opcion4:
+    CALL OrdenarNotas
+    RET
+
+Opcion5:
+    CALL MostrarListaCompleta
+    RET
+
+SalirPrograma:
+    MOV AH, 4Ch
+    INT 21h
+
+;--------------------------------------------------
+; AgregarEstudiante
+;--------------------------------------------------
+AgregarEstudiante PROC
+    PUSH AX
     
+    MOV AL, cnt
+    CMP AL, indMax
+    JL  PuedeAgregar
     
-    ; salto de linea
-    mov ah, 02h  ; Escribir un solo caracter en la salida estandar
-    mov dl, 0Dh  ; Se carga 0Dh en DL, Carriage Return, devuelve al inicio de linea actual  
-    int 21h      
-    mov ah, 02h  ; Escribir un solo carácter en la salida estandar
-    mov dl, 0Ah  ; Se carga 0Ah que es Avance de Linea, avanza siguiente fila
-    int 21h  
+    MOV AH, 09h
+    LEA DX, msgMaxAlcanzado
+    INT 21h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    JMP FinAgregar
     
-    je menu_loop ; Se ejecuta solo si AL tiene 9
+PuedeAgregar:
+    CALL InputProc
     
+FinAgregar:
+    POP AX
+    RET
+AgregarEstudiante ENDP
+
+;--------------------------------------------------
+; InputProc - CORREGIDO
+;--------------------------------------------------
+InputProc PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+    PUSH DI
     
-    ; Confirmar dato
-    mov ah, 09h
-    lea dx, confirmMsg
-    int 21h
+    ; Pedir nombre
+    MOV AH, 09h
+    LEA DX, msgNombre
+    INT 21h
+    
+    ; Leer nombre con INT 21h/0Ah
+    MOV indBuffer, indSize  ; Máximo de caracteres a leer
+    LEA DX, indBuffer
+    MOV AH, 0Ah
+    INT 21h
+    
+    ; Terminar cadena con '$'
+    XOR BX, BX
+    MOV BL, indBuffer[1]    ; Número de caracteres leídos
+    MOV indBuffer[BX+2], '$'
+    
+    ; Copiar nombre a la lista
+    XOR AX, AX
+    MOV AL, cnt
+    MOV BL, indSize+1
+    MUL BL
+    LEA DI, indLst
+    ADD DI, AX
+    LEA SI, indBuffer + 2   ; Saltar los primeros 2 bytes del buffer
+    CALL CopiarCadena
 
-    jmp ingreso_loop   ; Seguir pidiendo hasta que presione '9'
+    ; Pedir nota
+    MOV AH, 09h
+    LEA DX, msgNota
+    INT 21h
 
-; ------------------------
-; 2. Mostrar Estadisticas
-; ------------------------  
-mostrar_estads:
-    mov ah, 09h
-    lea dx, estadsMsg
-    int 21h
-    jmp menu_loop
-  
-; ------------------------
-; 3. Buscar Estudiante
-; ------------------------
+    ; Leer nota
+    MOV grdBuffer, grdSize
+    LEA DX, grdBuffer
+    MOV AH, 0Ah
+    INT 21h
+    
+    ; Terminar cadena con '$'
+    XOR BX, BX
+    MOV BL, grdBuffer[1]
+    MOV grdBuffer[BX+2], '$'
+    
+    ; Copiar nota a la lista
+    XOR AX, AX
+    MOV AL, cnt
+    MOV BL, grdSize+1
+    MUL BL
+    LEA DI, grdLst
+    ADD DI, AX
+    LEA SI, grdBuffer + 2
+    CALL CopiarCadena
 
-buscar_estud:
-    mov ah, 09h
-    lea dx, buscarMsg
-    int 21h
-    jmp menu_loop
+    ; Incrementar contador
+    INC cnt
+    
+    MOV AH, 09h
+    LEA DX, newline
+    INT 21h
+    
+    POP DI
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+InputProc ENDP
 
+;--------------------------------------------------
+; CopiarCadena - CORREGIDO
+;--------------------------------------------------
+CopiarCadena PROC
+    PUSH AX
+    PUSH CX
+    PUSH SI
+    PUSH DI
+    
+CopiarLoop:
+    MOV AL, [SI]
+    CMP AL, 0Dh        ; Saltar carriage return
+    JE  FinCopia
+    CMP AL, 0Ah        ; Saltar line feed
+    JE  SaltarChar
+    MOV [DI], AL
+    INC DI
+SaltarChar:
+    INC SI
+    CMP BYTE PTR [SI], '$'
+    JNE CopiarLoop
+    
+FinCopia:
+    MOV BYTE PTR [DI], '$'
+    POP DI
+    POP SI
+    POP CX
+    POP AX
+    RET
+CopiarCadena ENDP
 
-; -------------------------
-; 4. Ordenar Calificaciones
-; -------------------------
-ordenar_calif:
-    mov ah, 09h
-    lea dx, ordenarMsg
-    int 21h
-    jmp menu_loop
-  
-  
-  
-; ------------------------
-; 5. Salir
-; ------------------------
-exit_program:
-    mov ah, 4Ch
-    int 21h   
+;--------------------------------------------------
+; MostrarListaCompleta - CORREGIDO
+;--------------------------------------------------
+MostrarListaCompleta PROC
+    CALL ClrScreen
+    
+    MOV AH, 09h
+    LEA DX, msgLista
+    INT 21h
+    LEA DX, msgEncabezado
+    INT 21h
+    LEA DX, newline
+    INT 21h
+    
+    ; Verificar si hay estudiantes
+    MOV AL, cnt
+    CMP AL, 0
+    JE FinMostrar
+    
+    XOR CX, CX
+    MOV CL, cnt
+    XOR BX, BX
+    
+MostrarEstudiante:
+    PUSH BX
+    PUSH CX
+    
+    ; Mostrar número
+    MOV AH, 02h
+    MOV DL, BL
+    ADD DL, '1'
+    INT 21h
+    MOV DL, '.'
+    INT 21h
+    MOV DL, ' '
+    INT 21h
+    
+    ; Mostrar nombre
+    MOV AL, BL
+    MOV AH, indSize+1
+    MUL AH
+    LEA SI, indLst
+    ADD SI, AX
+    CALL ImprimirCadena
+    
+    ; Tabulación
+    MOV AH, 09h
+    LEA DX, tab
+    INT 21h
+    
+    ; Mostrar nota
+    MOV AL, BL
+    MOV AH, grdSize+1
+    MUL AH
+    LEA SI, grdLst
+    ADD SI, AX
+    CALL ImprimirCadena
+    
+    ; Nueva línea
+    MOV AH, 09h
+    LEA DX, newline
+    INT 21h
+    
+    POP CX
+    POP BX
+    INC BX
+    LOOP MostrarEstudiante
+    
+FinMostrar:
+    MOV AH, 09h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+MostrarListaCompleta ENDP
 
-; ------------------------
-; Datos
-; ------------------------
-menuMsg db "Seleccione una opcion por ejecutar:",13,10
-     db "1. Ingrese calificacion.",13,10
-     db "2. Mostrar estadisticas",13,10
-     db "3. Buscar estudiantes (indice)",13,10
-     db "4. Ordenar calificaciones",13,10
-     db "5. Salir",13,10,'$'
-     
-ingreseMsg db 13,10,'Por favor ingrese su estudiante o digite 9 para salir al menu principal.',13,10,'$' 
-estadsMsg db 13,10,'Se van a mostrar estadisticas de calificaciones. Presione Enter o digite 9 para salir al menu principal.',13,10,'$'
-buscarMsg db 13,10,'Se desea buscar un estudiante por medio de indice de ubicaion. Digite el indie y presiones enter o digite 9 para salir al menu principal.',13,10,'$' 
-ordenarMsg db 13,10,'Se desean ordenar las calificaciones. Presione Enter o digite 9 para salir al menu principal.',13,10,'$' 
-confirmMsg db 13,10,'Dato recibido.',13,10,'$'  
-  
-datosIngreso db 50       ; 1. Byte 0: Capacidad Maxima
-            db ?         ; 2. Byte 1: Longitud Real (la llena DOS)
-            db 50 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
-; TODO
+;--------------------------------------------------
+; ImprimirCadena - CORREGIDO
+;--------------------------------------------------
+ImprimirCadena PROC
+    PUSH AX
+    PUSH DX
+    PUSH SI
+    
+ImprimirLoop:
+    MOV DL, [SI]
+    CMP DL, '$'
+    JE FinImprimir
+    MOV AH, 02h
+    INT 21h
+    INC SI
+    JMP ImprimirLoop
+    
+FinImprimir:
+    POP SI
+    POP DX
+    POP AX
+    RET
+ImprimirCadena ENDP
+
+;--------------------------------------------------
+; Funciones stub (simplificadas)
+;--------------------------------------------------
+MostrarEstadisticas PROC
+    CALL ClrScreen
+    MOV AH, 09h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+MostrarEstadisticas ENDP
+
+BuscarEstudiante PROC
+    CALL ClrScreen
+    MOV AH, 09h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+BuscarEstudiante ENDP
+
+OrdenarNotas PROC
+    CALL ClrScreen
+    MOV AH, 09h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+OrdenarNotas ENDP
+
+;--------------------------------------------------
+; Limpiar pantalla
+;--------------------------------------------------
+ClrScreen:
+    MOV AX, 0600h   ; AH=06h (scroll), AL=00h (clear)
+    MOV BH, 07h     ; Atributo (gris sobre negro)
+    MOV CX, 0000h   ; Esquina superior izquierda
+    MOV DX, 184Fh   ; Esquina inferior derecha
+    INT 10h
+    
+    ; Reposition in (0, 0)
+    MOV AH, 02h
+    MOV BH, 00h
+    MOV DX, 0000h
+    INT 10h
+    RET
+
+END START
