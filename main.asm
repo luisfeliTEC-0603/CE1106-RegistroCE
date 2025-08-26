@@ -80,7 +80,7 @@ guardar_datos PROC
     mov actu_index, al       ; guardamos indice actual
 
     mov al, actu_index
-    mov bl, 30
+    mov bl, largo_nombre
     mul bl                   ; AX = index * 30
 
     lea di, nombres
@@ -205,15 +205,15 @@ estadsMsg db 13,10,'Se van a mostrar estadisticas de calificaciones. Presione En
 buscarMsg db 13,10,'Se desea buscar un estudiante por medio de indice de ubicaion. Digite el indie o digite 0 para salir al menu principal.',13,10,'$' 
 ordenarMsg db 13,10,'Se desean ordenar las calificaciones. Presione 1 para confirmar o digite 0 para salir al menu principal.',13,10,'$' 
 ordenarMsg_error db 13,10,'Debe presionar 1 para confirmar o 0 para voler al menu',13,10,'$' 
-
 confirmMsg db 13,10,'Dato recibido.',13,10,'$'  
   
 
+; Datos de ingreso de estudiante
 datosIngreso db 50       ; 1. Byte 0: Capacidad Maxima
             db ?         ; 2. Byte 1: Longitud Real (la llena DOS)
             db 50 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
                                                                        
-                                                                       
+; Al buscar un estudiante aqui se almacena el indice                                                                       
 indice_busqueda db 5    ; 1. Byte 0: Capacidad Maxima
             db ?        ; 2. Byte 1: Longitud Real (la llena DOS)
             db 5 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
@@ -224,7 +224,8 @@ contador_estudiantes DB 0    ; inicia en 0, max 15
 actu_index DB 0               ; el index actual
 
                                               
-; Arreglos para almacenar datos de estudiantes
+; Arreglos para almacenar datos de estudiantes 
+
 ; 15 nombres, 30 chars cada uno
 nombres DB 15 DUP(30 DUP('$'))  
 
