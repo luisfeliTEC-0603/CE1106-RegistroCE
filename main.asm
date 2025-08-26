@@ -52,7 +52,7 @@ ingreso_loop:   ; Loop para seguir ingresando estudiantes
     cmp al, '0' ; Verifica si AL tiene 0 
     
     
-    ; salto de linea
+    ; Salto de linea
     mov ah, 02h  ; Escribir un solo caracter en la salida estandar
     mov dl, 0Dh  ; Se carga 0Dh en DL, Carriage Return, devuelve al inicio de linea actual  
     int 21h      
@@ -68,15 +68,33 @@ ingreso_loop:   ; Loop para seguir ingresando estudiantes
     lea dx, confirmMsg
     int 21h
     
-    ; Incrementar contador
-    inc contador_estudiantes
-    
+    ; Guardar datos de ingreso en memoria (variable nombres) 
+    CALL guardar_datos
+      
     ; Volver a inicio del loop
     jmp ingreso_loop
         
     
-    ; TODO: 
-    ; Guardar estudiantes en espacio de memoria con algun formato
+guardar_datos PROC
+    mov al, contador_estudiantes
+    mov actu_index, al       ; guardamos indice actual
+
+    mov al, actu_index
+    mov bl, 30
+    mul bl                   ; AX = index * 30
+
+    lea di, nombres
+    add di, ax               ; DI = nombres + index*30
+
+    lea si, datosIngreso+2
+    mov cl, [datosIngreso+1]
+    xor ch, ch               ; CX = longitud real
+    rep movsb                ; copiar datos   
+    
+    ; Incrementar contador
+    inc contador_estudiantes
+guardar_datos ENDP
+
 
 
 ; ------------------------
@@ -136,7 +154,8 @@ buscar_loop:
     ; Ubicar estudiante por medio de indice
     ; Imprimir informacion de estudiante en vez de confirmMsg
 
-
+    
+    
 ; -------------------------
 ; 4. Ordenar Calificaciones
 ; -------------------------
@@ -200,8 +219,9 @@ indice_busqueda db 5    ; 1. Byte 0: Capacidad Maxima
             db 5 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
             
 
-; Contador de estudiantes                                              
-contador_estudiantes DW 0    ; inicia en 0, max 15
+; Contador de estudiantes index actual                                              
+contador_estudiantes DB 0    ; inicia en 0, max 15
+actu_index DB 0               ; el index actual
 
                                               
 ; Arreglos para almacenar datos de estudiantes
@@ -213,3 +233,7 @@ enteros DW 15 DUP(0)
 
 ; 15 decimales (parte despues del punto)
 decimales DW 15 DUP(0)
+
+; Variavles constantes
+largo_nombre EQU 30
+max_estudi EQU 15                       
