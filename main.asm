@@ -67,11 +67,17 @@ ingreso_loop:   ; Loop para seguir ingresando estudiantes
     mov ah, 09h
     lea dx, confirmMsg
     int 21h
-
-    jmp ingreso_loop   ; Seguir pidiendo hasta que presione '9'     
+    
+    ; Incrementar contador
+    inc contador_estudiantes
+    
+    ; Volver a inicio del loop
+    jmp ingreso_loop
+        
     
     ; TODO: 
     ; Guardar estudiantes en espacio de memoria con algun formato
+
 
 ; ------------------------
 ; 2. Mostrar Estadisticas
@@ -166,7 +172,8 @@ exit_program:
 
 ; ------------------------
 ; Datos
-; ------------------------
+; ------------------------ 
+
 menuMsg db "Seleccione una opcion por ejecutar:",13,10
      db "1. Ingrese calificacion.",13,10
      db "2. Mostrar estadisticas",13,10
@@ -182,6 +189,7 @@ ordenarMsg_error db 13,10,'Debe presionar 1 para confirmar o 0 para voler al men
 
 confirmMsg db 13,10,'Dato recibido.',13,10,'$'  
   
+
 datosIngreso db 50       ; 1. Byte 0: Capacidad Maxima
             db ?         ; 2. Byte 1: Longitud Real (la llena DOS)
             db 50 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
@@ -191,3 +199,17 @@ indice_busqueda db 5    ; 1. Byte 0: Capacidad Maxima
             db ?        ; 2. Byte 1: Longitud Real (la llena DOS)
             db 5 dup(?) ; 3. Byte 2 al 11: Los caracteres ingresados
             
+
+; Contador de estudiantes                                              
+contador_estudiantes DW 0    ; inicia en 0, max 15
+
+                                              
+; Arreglos para almacenar datos de estudiantes
+; 15 nombres, 30 chars cada uno
+nombres DB 15 DUP(30 DUP('$'))  
+
+; 15 enteros (parte antes del punto)
+enteros DW 15 DUP(0)
+
+; 15 decimales (parte despues del punto)
+decimales DW 15 DUP(0)
