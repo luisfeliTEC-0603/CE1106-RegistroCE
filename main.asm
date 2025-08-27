@@ -153,18 +153,16 @@ buscar_loop:
     ; Verificar que entre un entero mayor que 0
     ; Ubicar estudiante por medio de indice
     ; Imprimir informacion de estudiante en vez de confirmMsg
-
-    
-    
+ 
 ; -------------------------
-; 4. Ordenar Calificaciones
+; 4. Separar String de numeros (VERSIÓN FUNCIONAL)
 ; -------------------------
 ordenar_loop:
     mov ah, 09h
     lea dx, ordenarMsg
     int 21h  
     
-    ; leer opcion, esta luego es almacenada en AL
+    ; leer opcion
     mov ah, 01h
     int 21h
     
@@ -172,16 +170,318 @@ ordenar_loop:
     je menu_loop
     
     cmp al, '1'
-    je menu_loop ; Salta a loop de ordenar calificaciones
+    je separar_numeros  ; Llama a la función de separar
     
-    jmp ordenar_loop 
+    jmp ordenar_loop
+
+separar_numeros:
+    call separar_numeros_func
+    jmp menu_loop
+
+; --------------------------------------------------
+; Subrutina: separar_numeros_func
+; --------------------------------------------------
+separar_numeros_func proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
     
-    ; TODO
-    ; Acceder a calificaciones y mostrarlas, se debe elegir si es de menor a mayor o al reves
-    ; Falta algoritmo de ordenamiento
-  
-  
-  
+    ; Inicializar indices
+    mov si, offset numeros_string
+    mov di, offset enteros_array
+    mov bx, offset decimales_array
+    mov cx, 0                      ; Contador de numeros
+    
+procesar_numero:
+    ; Reiniciar valores temporales (32 bits para decimal)
+    mov word ptr entero_temp, 0
+    mov word ptr decimal_temp, 0     ; Parte baja
+    mov word ptr decimal_temp + 2, 0 ; Parte alta (32 bits total)
+    mov decimal_encontrado, 0
+    
+leer_entero:
+    mov al, [si]
+    cmp al, '.'              ; ¿Es punto decimal?
+    je encontro_decimal
+    cmp al, 13               ; ¿Es carriage return?
+    je fin_numero
+    cmp al, 10               ; ¿Es new line?
+    je fin_numero
+    cmp al, '$'              ; ¿Fin del string?
+    je terminar_proceso
+    
+    ; Convertir ASCII a número
+    sub al, '0'
+    mov ah, 0
+    push ax                  ; Guardar nuevo dígito
+    
+    ; entero_temp = entero_temp * 10
+    mov ax, entero_temp
+    mov dx, 10
+    mul dx
+    mov entero_temp, ax
+    
+    ; entero_temp = entero_temp + nuevo_dígito
+    pop ax
+    add entero_temp, ax
+    
+    inc si
+    jmp leer_entero
+
+encontro_decimal:
+    mov decimal_encontrado, 1
+    inc si                   ; Saltar el punto
+    
+leer_decimal:
+    mov al, [si]
+    cmp al, 13               ; ¿Es carriage return?
+    je fin_numero
+    cmp al, 10               ; ¿Es new line?
+    je fin_numero
+    cmp al, '$'              ; ¿Fin del string?
+    je fin_numero
+    
+    ; Convertir ASCII a número
+    sub al, '0'
+    mov ah, 0
+    push ax                  ; Guardar nuevo dígito
+    
+    ; decimal_temp = decimal_temp * 10 (32 bits)
+    push bx
+    push cx
+    push dx
+    
+    ; Multiplicar parte baja (decimal_temp) por 10
+    mov ax, word ptr decimal_temp
+    mov dx, 10
+    mul dx
+    mov word ptr decimal_temp, ax
+    mov cx, dx              ; Guardar carry
+    
+    ; Multiplicar parte alta (decimal_temp + 2) por 10 y sumar carry
+    mov ax, word ptr decimal_temp + 2
+    mov dx, 10
+    mul dx
+    add ax, cx              ; Sumar el carry de la parte baja
+    mov word ptr decimal_temp + 2, ax
+    
+    pop dx
+    pop cx
+    pop bx
+    
+    ; decimal_temp = decimal_temp + nuevo_dígito
+    pop ax
+    add word ptr decimal_temp, ax
+    adc word ptr decimal_temp + 2, 0  ; Sumar carry si hay
+    
+    inc si
+    jmp leer_decimal
+
+fin_numero:
+    ; Guardar entero en array (16 bits)
+    mov ax, entero_temp
+    mov [di], ax
+    add di, 2
+    
+    ; Guardar decimal en array (32 bits - 2 palabras)
+    mov ax, word ptr decimal_temp      ; Parte baja
+    mov [bx], ax
+    mov ax, word ptr decimal_temp + 2  ; Parte alta
+    mov [bx + 2], ax
+    add bx, 4                         ; Avanzar 4 bytes (32 bits)
+    
+    ; Mostrar valores para debug
+    call mostrar_valores_debug
+    
+    ; Avanzar puntero (manejar CRLF)
+avanzar_puntero:
+    mov al, [si]
+    cmp al, 13
+    jne check_lf
+    inc si
+    jmp avanzar_puntero
+    
+check_lf:
+    cmp al, 10
+    jne check_fin
+    inc si
+    jmp avanzar_puntero
+    
+check_fin:
+    ; Incrementar contador y verificar límite
+    inc cx
+    cmp cx, 4               ; Máximo 4 números
+    jl procesar_numero
+    
+terminar_proceso:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+separar_numeros_func endp
+
+; --------------------------------------------------
+; Debuger Subrutina: mostrar_valores_debug
+; --------------------------------------------------
+mostrar_valores_debug proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    
+    ; Mostrar mensaje
+    mov ah, 09h
+    lea dx, debug_msg
+    int 21h
+    
+    ; Mostrar entero
+    mov ax, entero_temp
+    call mostrar_numero_16
+    
+    ; Mostrar separador
+    mov ah, 02h
+    mov dl, '.'
+    int 21h
+    
+    ; Mostrar decimal (32 bits)
+    mov ax, word ptr decimal_temp      ; Parte baja
+    mov dx, word ptr decimal_temp + 2  ; Parte alta
+    call mostrar_numero_32
+    
+    ; Nueva línea
+    mov ah, 02h
+    mov dl, 13
+    int 21h
+    mov dl, 10
+    int 21h
+    
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+mostrar_valores_debug endp
+
+; --------------------------------------------------
+; Subrutina mostrar_numero_16 (AX = número 16 bits)
+; --------------------------------------------------
+mostrar_numero_16 proc
+    push ax
+    push bx
+    push cx
+    push dx
+    
+    mov bx, 10
+    mov cx, 0
+    
+    ; Caso especial: número 0
+    cmp ax, 0
+    jne convertir_loop_16
+    mov dl, '0'
+    mov ah, 02h
+    int 21h
+    jmp fin_mostrar_16
+    
+convertir_loop_16:
+    mov dx, 0
+    div bx
+    push dx
+    inc cx
+    cmp ax, 0
+    jne convertir_loop_16
+    
+mostrar_digitos_16:
+    pop dx
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop mostrar_digitos_16
+    
+fin_mostrar_16:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+mostrar_numero_16 endp
+
+; --------------------------------------------------
+; Subrutina mostrar_numero_32 (DX:AX = número 32 bits)
+; --------------------------------------------------
+mostrar_numero_32 proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    
+    ; Usar pila para construir el número
+    mov cx, 0
+    mov bx, 10
+    
+convertir_loop_32:
+    ; Dividir DX:AX por 10
+    push ax
+    mov ax, dx
+    xor dx, dx
+    div bx
+    mov di, ax      ; DI = cociente alto
+    pop ax
+    div bx          ; AX = cociente bajo, DX = residuo
+    push dx         ; Guardar dígito
+    inc cx
+    
+    ; Mover cociente a DX:AX
+    mov dx, di
+    
+    ; Verificar si el número es cero
+    or ax, dx
+    jnz convertir_loop_32
+    
+mostrar_digitos_32:
+    pop dx
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop mostrar_digitos_32
+    
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+mostrar_numero_32 endp
+
+; --------------------------------------------------
+; VARIABLES Y ARRAYS
+; --------------------------------------------------
+numeros_string db "88.88888", 13, 10
+               db "77", 13, 10
+               db "99.99999", 13, 10
+               db "17.76543", '$'
+
+; Arrays para almacenar los resultados
+enteros_array dw 4 dup(0)        ; Array de enteros (16 bits)
+decimales_array dw 8 dup(0)      ; Array de decimales (4 números * 2 words cada uno = 8 words)
+
+; Variables temporales
+entero_temp dw 0
+decimal_temp dw 2 dup(0)         ; 32 bits (2 words: parte baja + parte alta)
+decimal_encontrado db 0
+
+; Mensajes
+debug_msg db 13,10,"Procesado: $"
 ; ------------------------
 ; 5. Salir
 ; ------------------------
