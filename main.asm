@@ -4,10 +4,10 @@
 .DATA
 indSize     EQU 30
 grdSize     EQU 10
-indMax      EQU 3
+indMax      EQU 15
 
-indBuffer   DB indSize    ; tamaño máximo
-           DB ?          ; caracteres leídos
+indBuffer  DB indSize    ; size maximo
+           DB ?          ; caracteres leidos
            DB indSize+2 DUP(0)  ; buffer real
            
 grdBuffer   DB grdSize
@@ -44,7 +44,8 @@ msgOpcionInvalida DB 13, 10, 'Opcion invalida! Presione cualquier tecla...$'
 msgMaxAlcanzado DB 13, 10, 'Maximo de estudiantes alcanzado!$'
 msgPresioneTecla DB 13, 10, 'Presione cualquier tecla para continuar...$'
 debug_msg db 13,10,"Procesado: $"  
-  
+msg_aprob     db 'Porcentaje de aprobados: $'
+msg_reprob    db 13,10,'Porcentaje de reprobados: $' 
   
   
   
@@ -55,7 +56,10 @@ decimales_array  dw indMax * 2 dup(0)    ; Array de decimales (indMax * 32 bits)
 entero_temp dw 0
 decimal_temp dw 2 dup(0)         ; 32 bits (2 words: parte baja + parte alta)
 decimal_encontrado db 0
-                              
+  
+; Contadores de aprobaciones
+aprobados db 0
+desaprobados db 0                             
                               
                               
 .CODE
@@ -154,7 +158,7 @@ FinAgregar:
 AgregarEstudiante ENDP
 
 ;--------------------------------------------------
-; InputProc - CORREGIDO
+; InputProc 
 ;--------------------------------------------------
 InputProc PROC
     PUSH AX
@@ -170,24 +174,24 @@ InputProc PROC
     INT 21h
     
     ; Leer nombre con INT 21h/0Ah
-    MOV indBuffer, indSize  ; MÃ¡ximo de caracteres a leer
-    LEA DX, indBuffer
+    MOV indBuffer, indSize  ; Maximo de caracteres a leer (indSize es una costante)
+    LEA DX, indBuffer       ; Carga la direccion del buffer donde se guardara el nombre
     MOV AH, 0Ah
     INT 21h
     
     ; Terminar cadena con '$'
-    XOR BX, BX
-    MOV BL, indBuffer[1]    ; NÃºmero de caracteres leÃ­dos
-    MOV indBuffer[BX+2], '$'
+    XOR BX, BX              ; Limpia el valor de BX
+    MOV BL, indBuffer[1]    ; Numero de caracteres leidos se guardan en BL, valor de indSize
+    MOV indBuffer[BX+2], '$'; Agregar indicador de finalizacion al final 
     
     ; Copiar nombre a la lista
-    XOR AX, AX
+    XOR AX, AX              ; Limpia el valor de AX
     MOV AL, cnt
     MOV BL, indSize+1
-    MUL BL
-    LEA DI, indLst
-    ADD DI, AX
-    LEA SI, indBuffer + 2   ; Saltar los primeros 2 bytes del buffer
+    MUL BL                  ; AX = AL * BL = cnt * (indSize+1) ---> Se almacena en AX
+    LEA DI, indLst          ; DI (Destination Index) apunta al inicio de array indLst
+    ADD DI, AX              ; Se adiciona para mover el cursos al guardar la data
+    LEA SI, indBuffer + 2   ; Saltar los primeros 2 bytes del buffer, se almacena el inicio de nombre en SI (source index)
     CALL CopiarCadena
 
     ; Pedir nota
@@ -233,7 +237,7 @@ InputProc PROC
 InputProc ENDP
 
 ;--------------------------------------------------
-; CopiarCadena - CORREGIDO
+; CopiarCadena 
 ;--------------------------------------------------
 CopiarCadena PROC
     PUSH AX
@@ -242,16 +246,17 @@ CopiarCadena PROC
     PUSH DI
     
 CopiarLoop:
-    MOV AL, [SI]
-    CMP AL, 0Dh        ; Saltar carriage return
+    MOV AL, [SI]       ; Esto es guardar en AL la posicion del primer caracter de la data de buffer
+                       ; la primera vez que se llama al PROC, luego almacenara el siguiente caracter
+    CMP AL, 0Dh        ; Saltar carriage return, final de la linea
     JE  FinCopia
-    CMP AL, 0Ah        ; Saltar line feed
-    JE  SaltarChar
+    CMP AL, 0Ah        ; Saltar line feed, que es avance de linea o de fila
+    JE  SaltarChar      
     MOV [DI], AL
-    INC DI
-SaltarChar:
-    INC SI
-    CMP BYTE PTR [SI], '$'
+    INC DI             ; Se incrementa DI para apuntar al siguiente lugar del buffer destino.
+SaltarChar:            
+    INC SI             ; Avanza al siguiente caracter de buffer
+    CMP BYTE PTR [SI], '$' ; Verifica si ya termina la cadena
     JNE CopiarLoop
     
 FinCopia:
@@ -264,7 +269,7 @@ FinCopia:
 CopiarCadena ENDP
 
 ;--------------------------------------------------
-; MostrarListaCompleta - CORREGIDO
+; MostrarListaCompleta 
 ;--------------------------------------------------
 MostrarListaCompleta PROC
     CALL ClrScreen
@@ -290,7 +295,7 @@ MostrarEstudiante:
     PUSH BX
     PUSH CX
     
-    ; Mostrar nÃºmero
+    ; Mostrar numero
     MOV AH, 02h
     MOV DL, BL
     ADD DL, '1'
@@ -308,7 +313,7 @@ MostrarEstudiante:
     ADD SI, AX
     CALL ImprimirCadena
     
-    ; TabulaciÃ³n
+    ; Tabulacion
     MOV AH, 09h
     LEA DX, tab
     INT 21h
@@ -321,7 +326,7 @@ MostrarEstudiante:
     ADD SI, AX
     CALL ImprimirCadena
     
-    ; Nueva lÃ­nea
+    ; Nueva linea
     MOV AH, 09h
     LEA DX, newline
     INT 21h
@@ -341,7 +346,7 @@ FinMostrar:
 MostrarListaCompleta ENDP
 
 ;--------------------------------------------------
-; ImprimirCadena - CORREGIDO
+; ImprimirCadena
 ;--------------------------------------------------
 ImprimirCadena PROC
     PUSH AX
@@ -368,12 +373,13 @@ ImprimirCadena ENDP
 ; Funciones stub (simplificadas)
 ;--------------------------------------------------
 MostrarEstadisticas PROC
-    CALL ClrScreen
+    CALL ClrScreen 
+    CALL calcular_porcentajes
     MOV AH, 09h
     LEA DX, msgPresioneTecla
     INT 21h
     MOV AH, 01h
-    INT 21h
+    INT 21h 
     RET
 MostrarEstadisticas ENDP
 
@@ -443,19 +449,19 @@ procesar_numero:
     
 leer_entero:
     mov al, [si]
-    cmp al, '$'              ; ¿Fin del string?
+    cmp al, '$'              ; Fin del string?
     je fin_numero
-    cmp al, '.'              ; ¿Es punto decimal?
+    cmp al, '.'              ; Es punto decimal?
     je encontro_decimal
-    cmp al, 13               ; ¿Es carriage return?
+    cmp al, 13               ; Es carriage return?
     je fin_numero
-    cmp al, 10               ; ¿Es new line?
+    cmp al, 10               ; Es new line?
     je fin_numero
     
-    ; Convertir ASCII a número
+    ; Convertir ASCII a numero
     sub al, '0'
     mov ah, 0
-    push ax                  ; Guardar nuevo dígito
+    push ax                  ; Guardar nuevo digito
     
     ; entero_temp = entero_temp * 10
     mov ax, entero_temp
@@ -463,7 +469,7 @@ leer_entero:
     mul dx
     mov entero_temp, ax
     
-    ; entero_temp = entero_temp + nuevo_dígito
+    ; entero_temp = entero_temp + nuevo_digito
     pop ax
     add entero_temp, ax
     
@@ -546,7 +552,7 @@ fin_numero:
     ; Calcular: SI = offset grdLst + (cx * 11)
     push ax
     push dx
-    mov ax, cx               ; AX = número actual (1, 2, 3...)
+    mov ax, cx               ; AX = numero actual (1, 2, 3...)
     mov dx, grdSize
     inc dx                   ; DX = 11 (grdSize + 1)
     mul dx                   ; AX = cx * 11
@@ -703,5 +709,126 @@ mostrar_digitos_32:
     pop ax
     ret
 mostrar_numero_32 endp
+; -------------------------------------------------
+; CALCULAR PORCENTAJES PROC
+; -------------------------------------------------
+
+calcular_porcentajes proc
+    mov cl, cnt        ; cnt es 8 bits, usamos CL como contador
+    xor si, si         ; indice del array
+    mov aprobados,0
+    mov desaprobados,0
+
+ciclo_notas:
+    cmp cl,0
+    je fin_ciclo
+
+    mov ax, enteros_array[si] ; cargar nota
+    cmp ax,70
+    jl es_reprobado
+
+es_aprobado:
+    inc aprobados
+    jmp siguiente
+
+es_reprobado:
+    inc desaprobados
+
+siguiente:
+    add si,2       ; siguiente palabra
+    dec cl
+    jmp ciclo_notas
+
+fin_ciclo:
+
+    ; ------------------------------
+    ; porcentaje aprobados = (aprobados * 100) / cnt
+    ; ------------------------------
+    xor ax, ax        ; LIMPIAR AX COMPLETAMENTE
+    mov al, aprobados ; cargar aprobados (8 bits)
+    mov bl, 100
+    mul bl            ; AX = aprobados * 100
+    mov bl, cnt       ; divisor
+    div bl            ; AL = cociente, AH = residuo
+    xor ah, ah        ; descartar residuo, AX = porcentaje
+    push ax           ; guardar porcentaje
+
+    ; imprimir mensaje de aprobados
+    mov ah, 9
+    lea dx, msg_aprob
+    int 21h
+    pop ax
+    call print_num    ; imprimir porcentaje
+
+    ; ------------------------------
+    ; porcentaje reprobados = (desaprobados * 100) / cnt
+    ; ------------------------------
+    xor ax, ax        ; LIMPIAR AX COMPLETAMENTE - ESTO ES LO QUE FALTABA
+    mov al, desaprobados ; cargar desaprobados (8 bits)
+    mov bl, 100
+    mul bl            ; AX = desaprobados * 100
+    mov bl, cnt       ; divisor
+    div bl            ; AL = cociente, AH = residuo
+    xor ah, ah        ; descartar residuo, AX = porcentaje
+
+    ; imprimir mensaje de reprobados
+    push ax           ; guardar porcentaje temporalmente
+    mov ah, 9
+    lea dx, msg_reprob
+    int 21h
+    pop ax
+    call print_num
+
+    ret
+calcular_porcentajes endp
+
+; ==========================================
+; print_num: imprime AX en decimal
+; ==========================================
+print_num proc
+    push ax
+    push bx
+    push cx
+    push dx
+
+    mov cx, 0          ; contador de dígitos
+    mov bx, 10         ; divisor para decimal
+
+    cmp ax, 0
+    jne conv_loop
+    ; si AX=0, imprimir '0' directamente
+    mov dl, '0'
+    mov ah, 2
+    int 21h
+    jmp print_symbol
+
+conv_loop:
+    xor dx, dx
+    div bx            ; AX / 10 -> cociente en AX, residuo en DX
+    push dx           ; guardar residuo (dígito)
+    inc cx
+    cmp ax, 0
+    jne conv_loop
+
+print_digits:
+    pop dx
+    add dl, '0'
+    mov ah, 2
+    int 21h
+    loop print_digits
+
+print_symbol:
+    ; imprimir símbolo de porcentaje
+    mov dl, '%'
+    mov ah, 2
+    int 21h
+
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+print_num endp
+
 
 END START
