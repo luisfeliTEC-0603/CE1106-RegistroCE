@@ -370,7 +370,7 @@ FinImprimir:
 ImprimirCadena ENDP
 
 ;--------------------------------------------------
-; Funciones stub (simplificadas)
+; Funciones
 ;--------------------------------------------------
 MostrarEstadisticas PROC
     CALL ClrScreen 
@@ -422,10 +422,6 @@ ClrScreen:
 ;--------------------------------------------------
 ; Separa lista de strings a listas numericas
 ;--------------------------------------------------
-
-; --------------------------------------------------
-; Subrutina: separar_numeros_func
-; --------------------------------------------------
 separar_numeros_func proc
     push ax
     push bx
@@ -538,9 +534,6 @@ fin_numero:
     mov [bx + 2], ax
     add bx, 4                         ; Avanzar 4 bytes (32 bits)
     
-    ; Mostrar valores para debug
-    call mostrar_valores_debug
-    
     ; Avanzar al siguiente string en grdLst
     inc cx
     mov al, cnt
@@ -573,149 +566,13 @@ terminar_proceso:
     ret
 separar_numeros_func endp
 
-; --------------------------------------------------
-; Debuger Subrutina: mostrar_valores_debug
-; --------------------------------------------------
-mostrar_valores_debug proc
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    
-    ; Mostrar mensaje
-    mov ah, 09h
-    lea dx, debug_msg
-    int 21h
-    
-    ; Mostrar entero
-    mov ax, entero_temp
-    call mostrar_numero_16
-    
-    ; Mostrar separador
-    mov ah, 02h
-    mov dl, '.'
-    int 21h
-    
-    ; Mostrar decimal (32 bits)
-    mov ax, word ptr decimal_temp      ; Parte baja
-    mov dx, word ptr decimal_temp + 2  ; Parte alta
-    call mostrar_numero_32
-    
-    ; Nueva línea
-    mov ah, 02h
-    mov dl, 13
-    int 21h
-    mov dl, 10
-    int 21h
-    
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-mostrar_valores_debug endp
-
-; --------------------------------------------------
-; Subrutina mostrar_numero_16 (AX = número 16 bits)
-; --------------------------------------------------
-mostrar_numero_16 proc
-    push ax
-    push bx
-    push cx
-    push dx
-    
-    mov bx, 10
-    mov cx, 0
-    
-    ; Caso especial: número 0
-    cmp ax, 0
-    jne convertir_loop_16
-    mov dl, '0'
-    mov ah, 02h
-    int 21h
-    jmp fin_mostrar_16
-    
-convertir_loop_16:
-    mov dx, 0
-    div bx
-    push dx
-    inc cx
-    cmp ax, 0
-    jne convertir_loop_16
-    
-mostrar_digitos_16:
-    pop dx
-    add dl, '0'
-    mov ah, 02h
-    int 21h
-    loop mostrar_digitos_16
-    
-fin_mostrar_16:
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-mostrar_numero_16 endp
-
-; --------------------------------------------------
-; Subrutina mostrar_numero_32 (DX:AX = número 32 bits)
-; --------------------------------------------------
-mostrar_numero_32 proc
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    
-    ; Usar pila para construir el numero
-    mov cx, 0
-    mov bx, 10
-    
-convertir_loop_32:
-    ; Dividir DX:AX por 10
-    push ax
-    mov ax, dx
-    xor dx, dx
-    div bx
-    mov di, ax      ; DI = cociente alto
-    pop ax
-    div bx          ; AX = cociente bajo, DX = residuo
-    push dx         ; Guardar dígito
-    inc cx
-    
-    ; Mover cociente a DX:AX
-    mov dx, di
-    
-    ; Verificar si el numero es cero
-    or ax, dx
-    jnz convertir_loop_32
-    
-mostrar_digitos_32:
-    pop dx
-    add dl, '0'
-    mov ah, 02h
-    int 21h
-    loop mostrar_digitos_32
-    
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-mostrar_numero_32 endp
 ; -------------------------------------------------
-; CALCULAR PORCENTAJES PROC
+; Calcular Porcentajes de Estudiantes
 ; -------------------------------------------------
 
 calcular_porcentajes proc
     mov cl, cnt        ; cnt es 8 bits, usamos CL como contador
-    xor si, si         ; indice del array
+    xor si, si         ; Reinicio source index
     mov aprobados,0
     mov desaprobados,0
 
@@ -782,16 +639,16 @@ fin_ciclo:
     ret
 calcular_porcentajes endp
 
-; ==========================================
-; print_num: imprime AX en decimal
-; ==========================================
+;---------------------------------
+; Imprimir Numero contenido en AX
+;---------------------------------
 print_num proc
     push ax
     push bx
     push cx
     push dx
 
-    mov cx, 0          ; contador de dígitos
+    mov cx, 0          ; contador de digitos
     mov bx, 10         ; divisor para decimal
 
     cmp ax, 0
@@ -805,7 +662,7 @@ print_num proc
 conv_loop:
     xor dx, dx
     div bx            ; AX / 10 -> cociente en AX, residuo en DX
-    push dx           ; guardar residuo (dígito)
+    push dx           ; guardar residuo (digito)
     inc cx
     cmp ax, 0
     jne conv_loop
@@ -818,7 +675,7 @@ print_digits:
     loop print_digits
 
 print_symbol:
-    ; imprimir símbolo de porcentaje
+    ; imprimir simbolo de porcentaje
     mov dl, '%'
     mov ah, 2
     int 21h
