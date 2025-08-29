@@ -47,7 +47,9 @@ debug_msg db 13,10,"Procesado: $"
 msg_aprob     db 'Porcentaje de aprobados: $'
 msg_reprob    db 13,10,'Porcentaje de reprobados: $' 
   
-  
+msgSolicitarID DB 13, 10, 'Ingrese el numero del estudiante: $'
+msgIDInvalido DB 13, 10, 'ID invalido o estudiante no existe!', 13, 10, '$'
+msgEncontrado DB 13, 10, 'Estudiante encontrado:', 13, 10, '$'  
   
 ; Arrays para almacenar los resultados
 enteros_array    dw indMax dup(0)        ; Array de enteros (16 bits)
@@ -114,7 +116,7 @@ Opcion2:
     RET
 
 Opcion3:
-    CALL BuscarEstudiante
+    CALL SearchInd
     RET
 
 Opcion4:
@@ -155,7 +157,7 @@ PuedeAgregar:
 FinAgregar:
     POP AX
     RET
-AgregarEstudiante ENDP
+AgregarEstudiante ENDP   
 
 ;--------------------------------------------------
 ; InputProc 
@@ -235,6 +237,114 @@ InputProc PROC
     POP AX
     RET
 InputProc ENDP
+;--------------------------------------------------
+; Buscar por ID
+;--------------------------------------------------
+SearchInd PROC
+    CALL ClrScreen
+    
+    ; Promt
+    MOV AH, 09h
+    LEA DX, msgSolicitarID
+    INT 21h
+    
+    ; ID read
+    MOV AH, 01h
+    INT 21h
+    
+    ; Check 
+    CMP AL, '1'
+    JL IDInvalidoBusqueda
+    CMP AL, '9'
+    JG IDInvalidoBusqueda
+    
+    ; ASCII to num
+    SUB AL, '1'
+    
+    CALL DisplayInd
+    
+    MOV AH, 09h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+    
+IDInvalidoBusqueda:
+    MOV AH, 09h
+    LEA DX, msgIDInvalido
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+SearchInd ENDP
+
+;--------------------------------------------------
+; AL = ID
+;--------------------------------------------------
+DisplayInd PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+    
+    ; Verify with cnt
+    CMP AL, cnt
+    JGE IDInvalido
+    
+    ; Save  ID in  BX
+    XOR BX, BX
+    MOV BL, AL
+    
+    ; Display ID
+    MOV AH, 02h
+    MOV DL, BL
+    ADD DL, '1'
+    INT 21h
+    MOV DL, '.'
+    INT 21h
+    MOV DL, ' '
+    INT 21h
+    
+    ; Display name
+    MOV AL, BL
+    MOV CL, indSize+1
+    MUL CL           ; AX = AL * CL
+    LEA SI, indLst
+    ADD SI, AX
+    CALL ImprimirCadena
+    
+    ; Tab
+    MOV AH, 09h
+    LEA DX, tab
+    INT 21h
+    
+    ; Display grade
+    MOV AL, BL
+    MOV AH, grdSize+1
+    MUL AH           ; AX = AL * AH
+    LEA SI, grdLst
+    ADD SI, AX
+    CALL ImprimirCadena
+    
+    MOV AH, 09h
+    LEA DX, newline
+    INT 21h
+
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+DisplayInd ENDP
+    
+IDInvalido:
+    MOV AH, 09h
+    LEA DX, msgIDInvalido
+    INT 21h
+
 
 ;--------------------------------------------------
 ; CopiarCadena 
@@ -381,7 +491,7 @@ MostrarEstadisticas PROC
     MOV AH, 01h
     INT 21h 
     RET
-MostrarEstadisticas ENDP
+MostrarEstadisticas ENDP  
 
 BuscarEstudiante PROC
     CALL ClrScreen
