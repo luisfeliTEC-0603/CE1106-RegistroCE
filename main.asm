@@ -6,26 +6,31 @@ indSize     EQU 30
 grdSize     EQU 10
 indMax      EQU 3
 
-indBuffer   DB indSize+2 DUP(0)
-grdBuffer   DB grdSize+2 DUP(0)
+indBuffer   DB indSize    ; tama�o m�ximo
+           DB ?          ; caracteres le�dos
+           DB indSize+2 DUP(0)  ; buffer real
+           
+grdBuffer   DB grdSize
+            DB ?
+            DB grdSize+2 DUP(0)
 
-indLst      DB indMax DUP(indSize+1 DUP('$'))
-grdLst      DB indMax DUP(grdSize+1 DUP('$'))
+indLst      DB indMax * (indSize+1) DUP('$')  ; Forma correcta
+grdLst      DB indMax * (grdSize+1) DUP('$')
 
 cnt         DB 0
 
 ; --- Msgs & Display Prompts ---
 msgMenu     DB 13, 10, '-------------< CE1106 - REGISTRATION >---------------', 13, 10
-            DB         '-----------------< MAIN MENU >-----------------------',  13, 10
-            DB         '| 1. Add Student and Grade                          |', 13, 10
-            DB         '| 2. Display Stats                                  |', 13, 10
-            DB         '| 3. Search Student with Index                      |', 13, 10 
-            DB         '| 4. Order Grades (ASC/DESC)                        |', 13, 10
-            DB         '| 5. Display Uploaded Data                          |', 13, 10
-            DB         '| 0. Exit Program                                   |', 13, 10
-            DB         '-----------------------------------------------------', 13, 10
-            DB         '                                                     ', 13, 10
-            DB         'Input: $'
+            DB      '------------------< MAIN MENU >----------------------',  13, 10
+            DB      '| 1. Add Student and Grade                          |', 13, 10
+            DB      '| 2. Display Stats                                  |', 13, 10
+            DB      '| 3. Search Student with Index                      |', 13, 10 
+            DB      '| 4. Order Grades (ASC/DESC)                        |', 13, 10
+            DB      '| 5. Display Uploaded Data                          |', 13, 10
+            DB      '| 0. Exit Program                                   |', 13, 10
+            DB      '-----------------------------------------------------', 13, 10
+            DB      '                                                     ', 13, 10
+            DB      'Input: $'
 
 msgNombre DB 13, 10, 'Ingrese nombre completo: $'
 msgNota   DB 13, 10, 'Ingrese nota: $'
@@ -38,7 +43,20 @@ tab       DB 09h, '$'
 msgOpcionInvalida DB 13, 10, 'Opcion invalida! Presione cualquier tecla...$'
 msgMaxAlcanzado DB 13, 10, 'Maximo de estudiantes alcanzado!$'
 msgPresioneTecla DB 13, 10, 'Presione cualquier tecla para continuar...$'
+debug_msg db 13,10,"Procesado: $" 
 
+msgSolicitarID DB 13, 10, 'Ingrese el numero del estudiante (1-', indMax+'0', '): $'
+msgIDInvalido DB 13, 10, 'ID invalido o estudiante no existe!', 13, 10, '$'
+msgEncontrado DB 13, 10, 'Estudiante encontrado:', 13, 10, '$'
+  
+; Arrays para almacenar los resultados
+enteros_array    dw indMax dup(0)        ; Array de enteros (16 bits)
+decimales_array  dw indMax * 2 dup(0)    ; Array de decimales (indMax * 32 bits)
+; Variables temporales 
+entero_temp dw 0
+decimal_temp dw 2 dup(0)         ; 32 bits (2 words: parte baja + parte alta)
+decimal_encontrado db 0
+                                             
 .CODE
 START:
     MOV AX, @DATA
@@ -86,14 +104,16 @@ Opcion1:
     RET
 
 Opcion2:
+    CALL separar_numeros_func
     CALL MostrarEstadisticas
     RET
 
 Opcion3:
-    CALL BuscarEstudiante
+    CALL SearchInd
     RET
 
 Opcion4:
+    CALL separar_numeros_func
     CALL OrdenarNotas
     RET
 
@@ -211,6 +231,111 @@ InputProc PROC
     RET
 InputProc ENDP
 
+SearchInd PROC
+    CALL ClrScreen
+    
+    ; Promt
+    MOV AH, 09h
+    LEA DX, msgSolicitarID
+    INT 21h
+    
+    ; ID read
+    MOV AH, 01h
+    INT 21h
+    
+    ; Check 
+    CMP AL, '1'
+    JL IDInvalidoBusqueda
+    CMP AL, '9'
+    JG IDInvalidoBusqueda
+    
+    ; ASCII to num
+    SUB AL, '1'
+    
+    CALL DisplayInd
+    
+    MOV AH, 09h
+    LEA DX, msgPresioneTecla
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+    
+IDInvalidoBusqueda:
+    MOV AH, 09h
+    LEA DX, msgIDInvalido
+    INT 21h
+    MOV AH, 01h
+    INT 21h
+    RET
+SearchInd ENDP
+
+;--------------------------------------------------
+; AL = ID
+;--------------------------------------------------
+DisplayInd PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+    
+    ; Verify with cnt
+    CMP AL, cnt
+    JGE IDInvalido
+    
+    ; Save  ID in  BX
+    XOR BX, BX
+    MOV BL, AL
+    
+    ; Display ID
+    MOV AH, 02h
+    MOV DL, BL
+    ADD DL, '1'
+    INT 21h
+    MOV DL, '.'
+    INT 21h
+    MOV DL, ' '
+    INT 21h
+    
+    ; Display name
+    MOV AL, BL
+    MOV CL, indSize+1
+    MUL CL           ; AX = AL * CL
+    LEA SI, indLst
+    ADD SI, AX
+    CALL ImprimirCadena
+    
+    ; Tab
+    MOV AH, 09h
+    LEA DX, tab
+    INT 21h
+    
+    ; Display grade
+    MOV AL, BL
+    MOV AH, grdSize+1
+    MUL AH           ; AX = AL * AH
+    LEA SI, grdLst
+    ADD SI, AX
+    CALL ImprimirCadena
+    
+    MOV AH, 09h
+    LEA DX, newline
+    INT 21h
+
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+DisplayInd ENDP
+    
+IDInvalido:
+    MOV AH, 09h
+    LEA DX, msgIDInvalido
+    INT 21h
+
 ;--------------------------------------------------
 ; CopiarCadena - CORREGIDO
 ;--------------------------------------------------
@@ -265,7 +390,7 @@ MostrarListaCompleta PROC
     MOV CL, cnt
     XOR BX, BX
     
-MostrarEstudiante:
+MostrarEstudiante:    
     PUSH BX
     PUSH CX
     
@@ -281,8 +406,8 @@ MostrarEstudiante:
     
     ; Mostrar nombre
     MOV AL, BL
-    MOV AH, indSize+1
-    MUL AH
+    MOV CL, indSize+1
+    MUL CL  ; AX = AL * CL
     LEA SI, indLst
     ADD SI, AX
     CALL ImprimirCadena
@@ -386,11 +511,301 @@ ClrScreen:
     MOV DX, 184Fh   ; Esquina inferior derecha
     INT 10h
     
-    ; Reposition in (0, 0)
+    ; Posicionar cursor en 0,0
     MOV AH, 02h
     MOV BH, 00h
     MOV DX, 0000h
     INT 10h
-    RET
+    RET 
+;--------------------------------------------------
+; Separa lista de strings a listas numericas
+;--------------------------------------------------
+
+; --------------------------------------------------
+; Subrutina: separar_numeros_func
+; --------------------------------------------------
+separar_numeros_func proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    
+    ; Inicializar indices
+    mov si, offset grdLst
+    mov di, offset enteros_array
+    mov bx, offset decimales_array
+    mov cx, 0                      ; Contador de numeros
+    
+procesar_numero:
+    ; Reiniciar valores temporales (32 bits para decimal)
+    mov word ptr entero_temp, 0
+    mov word ptr decimal_temp, 0     ; Parte baja
+    mov word ptr decimal_temp + 2, 0 ; Parte alta (32 bits total)
+    mov decimal_encontrado, 0
+    
+leer_entero:
+    mov al, [si]
+    cmp al, '$'              ; �Fin del string?
+    je fin_numero
+    cmp al, '.'              ; �Es punto decimal?
+    je encontro_decimal
+    cmp al, 13               ; �Es carriage return?
+    je fin_numero
+    cmp al, 10               ; �Es new line?
+    je fin_numero
+    
+    ; Convertir ASCII a n�mero
+    sub al, '0'
+    mov ah, 0
+    push ax                  ; Guardar nuevo d�gito
+    
+    ; entero_temp = entero_temp * 10
+    mov ax, entero_temp
+    mov dx, 10
+    mul dx
+    mov entero_temp, ax
+    
+    ; entero_temp = entero_temp + nuevo_d�gito
+    pop ax
+    add entero_temp, ax
+    
+    inc si
+    jmp leer_entero
+
+encontro_decimal:
+    mov decimal_encontrado, 1
+    inc si                   ; Saltar el punto
+    
+leer_decimal:
+    mov al, [si]
+    cmp al, '$'              ; �Fin del string?
+    je fin_numero
+    cmp al, 13               ; �Es carriage return?
+    je fin_numero
+    cmp al, 10               ; �Es new line?
+    je fin_numero
+    
+    ; Convertir ASCII a n�mero
+    sub al, '0'
+    mov ah, 0
+    push ax                  ; Guardar nuevo d�gito
+    
+    ; decimal_temp = decimal_temp * 10 (32 bits)
+    push bx
+    push cx
+    push dx
+    
+    ; Multiplicar parte baja (decimal_temp) por 10
+    mov ax, word ptr decimal_temp
+    mov dx, 10
+    mul dx
+    mov word ptr decimal_temp, ax
+    mov cx, dx              ; Guardar carry
+    
+    ; Multiplicar parte alta (decimal_temp + 2) por 10 y sumar carry
+    mov ax, word ptr decimal_temp + 2
+    mov dx, 10
+    mul dx
+    add ax, cx              ; Sumar el carry de la parte baja
+    mov word ptr decimal_temp + 2, ax
+    
+    pop dx
+    pop cx
+    pop bx
+    
+    ; decimal_temp = decimal_temp + nuevo_d�gito
+    pop ax
+    add word ptr decimal_temp, ax
+    adc word ptr decimal_temp + 2, 0  ; Sumar carry si hay
+    
+    inc si
+    jmp leer_decimal
+
+fin_numero:
+    ; Guardar entero en array (16 bits)
+    mov ax, entero_temp
+    mov [di], ax
+    add di, 2
+    
+    ; Guardar decimal en array (32 bits - 2 palabras)
+    mov ax, word ptr decimal_temp      ; Parte baja
+    mov [bx], ax
+    mov ax, word ptr decimal_temp + 2  ; Parte alta
+    mov [bx + 2], ax
+    add bx, 4                         ; Avanzar 4 bytes (32 bits)
+    
+    ; Mostrar valores para debug
+    call mostrar_valores_debug
+    
+    ; Avanzar al siguiente string en grdLst
+    inc cx
+    mov al, cnt
+    cbw
+    cmp cx, ax               ; Comparar con cnt (convertido a word)
+    jge terminar_proceso     ; Si ya procesamos todos, terminar
+    
+    ; Avanzar SI al inicio del siguiente string (11 bytes por elemento)
+    ; Calcular: SI = offset grdLst + (cx * 11)
+    push ax
+    push dx
+    mov ax, cx               ; AX = n�mero actual (1, 2, 3...)
+    mov dx, grdSize
+    inc dx                   ; DX = 11 (grdSize + 1)
+    mul dx                   ; AX = cx * 11
+    mov si, offset grdLst
+    add si, ax               ; SI apunta al inicio del siguiente string
+    pop dx
+    pop ax
+    
+    jmp procesar_numero      ; Procesar el siguiente n�mero
+    
+terminar_proceso:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+separar_numeros_func endp
+
+; --------------------------------------------------
+; Debuger Subrutina: mostrar_valores_debug
+; --------------------------------------------------
+mostrar_valores_debug proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    
+    ; Mostrar mensaje
+    mov ah, 09h
+    lea dx, debug_msg
+    int 21h
+    
+    ; Mostrar entero
+    mov ax, entero_temp
+    call mostrar_numero_16
+    
+    ; Mostrar separador
+    mov ah, 02h
+    mov dl, '.'
+    int 21h
+    
+    ; Mostrar decimal (32 bits)
+    mov ax, word ptr decimal_temp      ; Parte baja
+    mov dx, word ptr decimal_temp + 2  ; Parte alta
+    call mostrar_numero_32
+    
+    ; Nueva l�nea
+    mov ah, 02h
+    mov dl, 13
+    int 21h
+    mov dl, 10
+    int 21h
+    
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+mostrar_valores_debug endp
+
+; --------------------------------------------------
+; Subrutina mostrar_numero_16 (AX = n�mero 16 bits)
+; --------------------------------------------------
+mostrar_numero_16 proc
+    push ax
+    push bx
+    push cx
+    push dx
+    
+    mov bx, 10
+    mov cx, 0
+    
+    ; Caso especial: n�mero 0
+    cmp ax, 0
+    jne convertir_loop_16
+    mov dl, '0'
+    mov ah, 02h
+    int 21h
+    jmp fin_mostrar_16
+    
+convertir_loop_16:
+    mov dx, 0
+    div bx
+    push dx
+    inc cx
+    cmp ax, 0
+    jne convertir_loop_16
+    
+mostrar_digitos_16:
+    pop dx
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop mostrar_digitos_16
+    
+fin_mostrar_16:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+mostrar_numero_16 endp
+
+; --------------------------------------------------
+; Subrutina mostrar_numero_32 (DX:AX = n�mero 32 bits)
+; --------------------------------------------------
+mostrar_numero_32 proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    
+    ; Usar pila para construir el numero
+    mov cx, 0
+    mov bx, 10
+    
+convertir_loop_32:
+    ; Dividir DX:AX por 10
+    push ax
+    mov ax, dx
+    xor dx, dx
+    div bx
+    mov di, ax      ; DI = cociente alto
+    pop ax
+    div bx          ; AX = cociente bajo, DX = residuo
+    push dx         ; Guardar d�gito
+    inc cx
+    
+    ; Mover cociente a DX:AX
+    mov dx, di
+    
+    ; Verificar si el numero es cero
+    or ax, dx
+    jnz convertir_loop_32
+    
+mostrar_digitos_32:
+    pop dx
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop mostrar_digitos_32
+    
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+mostrar_numero_32 endp
 
 END START
