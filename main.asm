@@ -50,10 +50,15 @@ msg_reprob    db 13,10,'Porcentaje de reprobados: $'
 msgSolicitarID DB 13, 10, 'Ingrese el numero del estudiante: $'
 msgIDInvalido DB 13, 10, 'ID invalido o estudiante no existe!', 13, 10, '$'
 msgEncontrado DB 13, 10, 'Estudiante encontrado:', 13, 10, '$'  
+
+;------------------------------------------------
+; Variables usadas para obtener listas de numeros
+;------------------------------------------------
   
 ; Arrays para almacenar los resultados
 enteros_array    dw indMax dup(0)        ; Array de enteros (16 bits)
-decimales_array  dw indMax * 2 dup(0)    ; Array de decimales (indMax * 32 bits)
+decimales_array  dw indMax * 2 dup(0)    ; Array de decimales (indMax * 32 bits) 
+
 ; Variables temporales 
 entero_temp dw 0
 decimal_temp dw 2 dup(0)         ; 32 bits (2 words: parte baja + parte alta)
@@ -61,7 +66,11 @@ decimal_encontrado db 0
   
 ; Contadores de aprobaciones
 aprobados db 0
-desaprobados db 0 
+desaprobados db 0  
+
+; Para generar formato de cantidad de ceros en casos donde los primeros decimales son ceros
+contador_ceros dw 0
+cero_decimales dw  dup(0)
 
 ; Bubble Sort Data
 ;indicador_posicion 1 ; 1 si es ASC o 0 si es DES
