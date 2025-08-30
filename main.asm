@@ -61,7 +61,12 @@ decimal_encontrado db 0
   
 ; Contadores de aprobaciones
 aprobados db 0
-desaprobados db 0                             
+desaprobados db 0 
+
+; Bubble Sort Data
+;indicador_posicion 1 ; 1 si es ASC o 0 si es DES
+ordenados_array    dw indMax dup(0)  ; Array que contiene lista con posicion de indices
+                                     ; Ej: [4,3,1,2] indicador = 1 ----> indice 4 tiene mayor nota e indice 2 la menor                           
                               
                               
 .CODE
@@ -112,6 +117,7 @@ Opcion1:
 
 Opcion2:
     CALL separar_numeros_func
+    CALL completar_con_ceros
     CALL MostrarEstadisticas
     RET
 
@@ -675,6 +681,54 @@ terminar_proceso:
     pop ax
     ret
 separar_numeros_func endp
+;--------------------------------------------------
+; Funcion para completar con ceros hasta 5 digitos 
+;--------------------------------------------------
+completar_con_ceros proc
+    mov cx, indMax       ; Numero de elementos en el array
+    mov si, offset decimales_array
+    
+procesar_num:
+    push cx              ; Guardar contador principal
+    
+    mov ax, [si]         ; Cargar el número actual
+    mov bx, 10           ; Base decimal
+    mov di, 0            ; Contador de dígitos
+    
+    ; Contar digitos del número
+contar_digitos:
+    xor dx, dx           ; Limpiar DX para la division
+    div bx               ; AX = AX/10, DX = residuo
+    inc di               ; Incrementar contador de dígitos
+    test ax, ax          ; ¿AX = 0?
+    jnz contar_digitos   ; Si no es cero, seguir contando
+    
+    ; Calcular cuántos ceros agregar (5 - digitos_actuales)
+    mov ax, 5
+    sub ax, di           ; AX = ceros a agregar
+    
+    ; Si ya tiene 5 o mas digitos, saltar
+    jbe siguiente_numero
+    
+    ; Multiplicar por 10^AX para agregar ceros
+    mov cx, ax           ; Guardar número de ceros a agregar
+    mov ax, [si]         ; Recuperar el número original
+    
+agregar_ceros:
+    mov dx, 10
+    mul dx               ; AX = AX * 10
+    loop agregar_ceros
+    
+    ; Guardar el número modificado
+    mov [si], ax
+    
+siguiente_numero:
+    add si, 2            ; Siguiente elemento (word = 2 bytes)
+    pop cx               ; Recuperar contador principal
+    loop procesar_num
+    
+    ret
+completar_con_ceros endp
 
 ; -------------------------------------------------
 ; Calcular Porcentajes de Estudiantes
