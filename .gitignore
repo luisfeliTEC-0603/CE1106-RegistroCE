@@ -1,3 +1,5 @@
+.gitignore
+
 # Ignore compiled files
 *.exe
 *.o
