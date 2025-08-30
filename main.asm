@@ -224,7 +224,8 @@ ProcesarEntrada PROC
     PUSH DX
     PUSH SI
     PUSH DI                                                         ; Preservar los registros.
-    
+
+PedirNombre:
     ; Pedir nombre del estudiante. 
     MOV AH, 09h
     LEA DX, msgPedirNombre
@@ -251,6 +252,7 @@ ProcesarEntrada PROC
     LEA SI, buffer_nombre+2                                         ; SI apunta a los datos en [2]
     CALL CopiarCadena                                               ; Copiar cadena en lista. 
 
+PedirCalif:
     ; Pedir calificación del estudiante.
     MOV AH, 09h
     LEA DX, msgPedirNota
