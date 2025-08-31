@@ -263,11 +263,9 @@ PedirCalif:
     LEA DX, buffer_calif
     MOV AH, 0Ah
     INT 21h
-    
-    ; Terminar cadena con '$'.
-    XOR BX, BX
-    MOV BL, buffer_calif[1]
-    MOV buffer_calif[BX+2], '$'
+
+    ; Rellenado del número con 5 decimales. 
+    CALL RellenadoFracc
     
     ; Copiar calificación en lista.
     XOR AX, AX
@@ -297,6 +295,90 @@ PedirCalif:
 ProcesarEntrada ENDP
 
 IntentarAgregar ENDP
+
+RellenadoFracc PROC                                                 ; Modifica el buffer de calificaciones para que cumpla con el formato fraccionario.
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+    PUSH DI
+    
+    LEA SI, buffer_calif+2                                          ; SI = inicio de la cadena de entrada.
+    XOR DI, DI                                                       ; DI = flag punto decimal encontrado.
+    XOR BX, BX                                                       ; BX = contador de parte fraccionaria.
+    
+BuscarPunto:                                                        ; Loop para determinar la parte fraccionaria. 
+    ; Lectura de caracteres hasta el punto.
+    MOV AL, [SI]
+    
+    CMP AL, '$'
+    JE  AgregarPuntoYDecimales                                      ; Fin de la cadena por terminador '$'.
+    CMP AL, 13
+    JE  AgregarPuntoYDecimales                                      ; Fin de la cadena por ENTER.
+    CMP AL, '.'
+    JE  EncontrarPunto                                               ; Se encontro el punto.
+
+    ; Siguiente caracter.
+    INC SI
+    JMP BuscarPunto
+
+EncontrarPunto:
+    MOV DI, 1                                                        ; Raise Flag...
+    INC SI                                                           ; Avanzar al primer decimal.
+    
+ContarDecimales:
+    ; Loop para determinar cantidad de decimales a rellenar. 
+    MOV AL, [SI]
+    CMP AL, '$'
+    JE  Rellenar
+    CMP AL, 13
+    JE  Rellenar
+    INC BX                                                           ; Incrementar contador de decimales leídos. 
+    INC SI
+    JMP ContarDecimales
+
+Rellenar:
+    ; Revisar si hay parte fraccionaria. 
+    CMP DI, 0
+    JE  AgregarPuntoYDecimales
+    
+    ; Calcular ceros.                                                ; Actualización de CX como futuro registro de ctrl.
+    MOV CX, 5
+    SUB CX, BX
+    JLE FinRelleno                                                  ; Finalizar si 5 o más decimales.
+
+    ; Loop para agregar los ceros. 
+    MOV AL, '0'
+AgregarCeroLoop:
+    MOV [SI], AL
+    INC SI
+    LOOP AgregarCeroLoop
+
+    MOV BYTE PTR [SI], '$'                                            ; Terminar la cadena
+    JMP FinRelleno
+
+AgregarPuntoYDecimales:                                               ; Específico para números que solo tienen parte entera. 
+    MOV BYTE PTR [SI], '.'                                            ; Agregar punto
+    INC SI
+
+    MOV CX, 5                                                         ; Indice para 5 iteraciones. 
+    MOV AL, '0'
+AgregarTodosCeros:
+    MOV [SI], AL
+    INC SI
+    LOOP AgregarTodosCeros
+    MOV BYTE PTR [SI], '$'
+
+FinRelleno:
+    POP DI
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+RellenadoFracc ENDP
 
 ; ---< Buscar Estudiante por ID >--- 
 BusquedaPorID PROC
