@@ -1065,18 +1065,19 @@ INTERNO_LOOP:
     cmp orden, 1
     je ORDEN_ASC
     
-    ; ORDEN DESCENDENTE (DSC = 0)
+    ; ORDEN ASCENDENTE (ASC = 1) 
     cmp dx, bp
-    jg NO_SWAP                ; Si i > j, está bien (mayor a menor)
-    jl SWAP_INDICES           ; Si i < j, intercambiar
-    jmp COMPARE_DECIMALES_DSC
+    jg NO_SWAP                
+    jl SWAP_INDICES           
+    jmp COMPARE_DECIMALES_ASC
 
 ORDEN_ASC:
-    ; ORDEN ASCENDENTE (ASC = 1)
+    
+    ; ORDEN DESCENDENTE (DSC = 0)
     cmp dx, bp
-    jl NO_SWAP                ; Si i < j, está bien (menor a mayor)
-    jg SWAP_INDICES           ; Si i > j, intercambiar
-    jmp COMPARE_DECIMALES_ASC
+    jl NO_SWAP                
+    jg SWAP_INDICES           
+    jmp COMPARE_DECIMALES_DSC
 
 COMPARE_DECIMALES_DSC:
     ; DSC: comparar decimales (mayor a menor)
