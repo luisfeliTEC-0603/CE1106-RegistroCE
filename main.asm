@@ -42,9 +42,11 @@ temp_index DB 0
 ; Contadores de aprobaciones
 contador_aprobados      DB 0
 contador_desaprobados   DB 0  
-
+ 
+; Bubble Sort 
 ; Array que contiene indices resultantes de un Bubble Sort
-array_BS   DW max_estudiantes dup(0)          
+array_BS   DW max_estudiantes dup(0)
+orden            DB 0 ; ASC = 1, DSC = 0          
 
 ; ---< Mensajes y Prompts del Sistema >---
 msgMenu     DB 13, 10, '-------------< CE1106 - SISTEMA DE REGISTRO >------------', 13, 10
@@ -79,6 +81,8 @@ msgEstEncontrado    DB 13, 10, 'Estudiante encontrado:', 13, 10, '$'
 
 ; Mensajes [4]
 msgT4               DB 13, 10, '[ ORDENAMIENTO DE CALIFICACIONES ]', 13, 10, '$'
+msg_pregunta    DB 13,10,'Ingrese 1 para ASC o 0 para DSC: $'
+msg_error       DB 13,10,'Error: Ingrese solo 1 o 0',13,10,'$'
 
 ; Mensajes [5]
 msgT5               DB  13, 10, '[ REGISTROS ]', 13, 10, '$'
@@ -167,7 +171,9 @@ Opcion3:
     RET
 
 Opcion4:
-    CALL separar_numeros_func 
+    CALL separar_numeros_func
+    
+    call PREGUNTAR_ORDEN 
     
     ; preparar registros para la rutina
     LEA BX, array_enteros     ; BX = base de enteros
@@ -1009,16 +1015,16 @@ print_num endp
 ; de array_enteros y array_decimales
 ; ==============================================
 BUBBLE_SORT_INDICES PROC
-    ; Cargar contador (8 bits) y convertir a 16 bits para loops
+    ; Cargar contador y verificar
     mov al, contador
     mov ah, 0
     mov cx, ax
     cmp cx, 0
-    je FIN_SORT                ; Si no hay datos, terminar
+    je FIN_SORT
     cmp cx, 1
-    je FIN_SORT                ; Si solo 1 dato, terminar
+    je FIN_SORT
     
-    ; Inicializar array_BS con índices secuenciales [0,1,2,...,contador-1]
+    ; Inicializar array_BS con índices secuenciales
     mov si, 0
     mov ax, 0
 INICIALIZAR_INDICES:
@@ -1027,69 +1033,137 @@ INICIALIZAR_INDICES:
     inc ax
     loop INICIALIZAR_INDICES
 
-    ; Bubble sort para ordenar índices
-    mov al, contador           ; Cargar contador (8 bits)
+    ; Bubble sort
+    mov al, contador
     mov ah, 0
     mov cx, ax
-    dec cx                     ; n-1 iteraciones externas
+    dec cx
     
 EXTERNO_LOOP:
-    push cx                    ; Guardar contador externo
-    mov si, 0                  ; Índice para array_BS
+    push cx
+    mov si, 0
     
-    ; Calcular límite para loop interno (contador-1)
     mov al, contador
     mov ah, 0
     mov cx, ax
     dec cx
     
 INTERNO_LOOP:
-    ; Obtener índices actual y siguiente
-    mov ax, array_BS[si]       ; índice i
-    mov bx, array_BS[si+2]     ; índice j
+    mov ax, array_BS[si]
+    mov bx, array_BS[si+2]
     
-    ; Comparar partes enteras primero
+    ; Comparar partes enteras
     mov di, ax
-    shl di, 1                  ; multiplicar por 2 (word size)
-    mov dx, array_enteros[di]  ; entero[i]
+    shl di, 1
+    mov dx, array_enteros[di]
     
     mov di, bx
-    shl di, 1                  ; multiplicar por 2 (word size)
-    mov bp, array_enteros[di]  ; entero[j]
+    shl di, 1
+    mov bp, array_enteros[di]
     
+    ; Comparación basada en el orden
+    cmp orden, 1
+    je ORDEN_ASC
+    
+    ; ORDEN DESCENDENTE (DSC = 0)
     cmp dx, bp
-    jg SWAP_INDICES            ; Si entero[i] > entero[j], intercambiar
-    jl NO_SWAP                 ; Si entero[i] < entero[j], no intercambiar
-    
-    ; Si enteros son iguales, comparar decimales
+    jg NO_SWAP                ; Si i > j, está bien (mayor a menor)
+    jl SWAP_INDICES           ; Si i < j, intercambiar
+    jmp COMPARE_DECIMALES_DSC
+
+ORDEN_ASC:
+    ; ORDEN ASCENDENTE (ASC = 1)
+    cmp dx, bp
+    jl NO_SWAP                ; Si i < j, está bien (menor a mayor)
+    jg SWAP_INDICES           ; Si i > j, intercambiar
+    jmp COMPARE_DECIMALES_ASC
+
+COMPARE_DECIMALES_DSC:
+    ; DSC: comparar decimales (mayor a menor)
     mov di, ax
-    shl di, 1                  ; multiplicar por 2
-    mov dx, array_decimales[di] ; decimal[i]
+    shl di, 1
+    mov dx, array_decimales[di]
     
-    mov di, bx  
-    shl di, 1                  ; multiplicar por 2
-    mov bp, array_decimales[di] ; decimal[j]
+    mov di, bx
+    shl di, 1
+    mov bp, array_decimales[di]
     
     cmp dx, bp
-    jg SWAP_INDICES            ; Si decimal[i] > decimal[j], intercambiar
-    jmp NO_SWAP                ; Si decimal[i] <= decimal[j], no intercambiar
+    jg NO_SWAP                ; decimal[i] > decimal[j], está bien
+    jl SWAP_INDICES           ; decimal[i] < decimal[j], intercambiar
+    jmp NO_SWAP               ; iguales, no intercambiar
+
+COMPARE_DECIMALES_ASC:
+    ; ASC: comparar decimales (menor a mayor)
+    mov di, ax
+    shl di, 1
+    mov dx, array_decimales[di]
+    
+    mov di, bx
+    shl di, 1
+    mov bp, array_decimales[di]
+    
+    cmp dx, bp
+    jl NO_SWAP                ; decimal[i] < decimal[j], está bien
+    jg SWAP_INDICES           ; decimal[i] > decimal[j], intercambiar
+    jmp NO_SWAP               ; iguales, no intercambiar
 
 SWAP_INDICES:
-    ; Intercambiar índices en array_BS
     mov ax, array_BS[si]
     mov bx, array_BS[si+2]
     mov array_BS[si], bx
     mov array_BS[si+2], ax
 
 NO_SWAP:
-    add si, 2                  ; Avanzar al siguiente par
+    add si, 2
     loop INTERNO_LOOP
     
-    pop cx                     ; Recuperar contador externo
+    pop cx
     loop EXTERNO_LOOP
     
 FIN_SORT:
     ret
-BUBBLE_SORT_INDICES ENDP             
+BUBBLE_SORT_INDICES ENDP
+
+; ==============================================
+; Pregunar por orden de Bubble Sort
+; ==============================================
+
+PREGUNTAR_ORDEN PROC
+PREGUNTAR:
+    ; Mostrar mensaje de pregunta
+    mov ah, 09h
+    lea dx, msg_pregunta
+    int 21h
+    
+    ; Leer un solo carácter
+    mov ah, 01h
+    int 21h
+    
+    ; Verificar entrada
+    cmp al, '1'
+    je ES_ASC
+    cmp al, '0'
+    je ES_DSC
+    jmp ERROR_INPUT
+
+ES_ASC:
+    mov orden, 1               ; ASC = 1
+    jmp FIN_PREGUNTA
+
+ES_DSC:
+    mov orden, 0               ; DSC = 0
+    jmp FIN_PREGUNTA
+
+ERROR_INPUT:
+    ; Mostrar mensaje de error
+    mov ah, 09h
+    lea dx, msg_error
+    int 21h
+    jmp PREGUNTAR
+
+FIN_PREGUNTA:
+    ret
+PREGUNTAR_ORDEN ENDP
 
 END START
