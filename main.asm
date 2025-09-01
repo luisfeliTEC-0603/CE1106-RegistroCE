@@ -4,7 +4,7 @@
 .DATA
 tam_nombre          EQU 30                                      ; TamaÃ±o mÃ¡ximo para el nombre del estudiante. 
 tam_calif           EQU 10                                      ; TamaÃ±o mÃ¡ximo para la calificaciÃ³n. 
-max_estudiantes     EQU 3                                       ; NÃºmero mÃ¡ximo de estudiantes en el registro.
+max_estudiantes     EQU 15                                       ; NÃºmero mÃ¡ximo de estudiantes en el registro.
 contador            DB 0                                        ; Registro de estudiantes ingresados. 
 
 ; ---< Buffers >---
@@ -41,7 +41,10 @@ flag_decimal    DB 0                                            ; Flag al encont
 temp_index DB 0  
 ; Contadores de aprobaciones
 contador_aprobados      DB 0
-contador_desaprobados   DB 0            
+contador_desaprobados   DB 0  
+
+; Array que contiene indices resultantes de un Bubble Sort
+array_BS   DW max_estudiantes dup(0)          
 
 ; ---< Mensajes y Prompts del Sistema >---
 msgMenu     DB 13, 10, '-------------< CE1106 - SISTEMA DE REGISTRO >------------', 13, 10
@@ -164,8 +167,15 @@ Opcion3:
     RET
 
 Opcion4:
-    CALL separar_numeros_func
-    CALL OrdenarCalif
+    CALL separar_numeros_func 
+    
+    ; preparar registros para la rutina
+    LEA BX, array_enteros     ; BX = base de enteros
+    LEA SI, array_decimales   ; SI = base de decimales
+    MOV CX, max_estudiantes   ; cantidad de elementos  
+    
+    ;CALL OrdenarCalif  ; Aqui dira si es ASC o DES
+    CALL BUBBLE_SORT_INDICES
     RET
 
 Opcion5:
@@ -991,5 +1001,95 @@ print_symbol:
     ret
 
 print_num endp
+                 
+                 
+; ==============================================
+; PROCEDIMIENTO: BUBBLE_SORT_INDICES
+; Ordena los índices en array_BS basado en los valores
+; de array_enteros y array_decimales
+; ==============================================
+BUBBLE_SORT_INDICES PROC
+    ; Cargar contador (8 bits) y convertir a 16 bits para loops
+    mov al, contador
+    mov ah, 0
+    mov cx, ax
+    cmp cx, 0
+    je FIN_SORT                ; Si no hay datos, terminar
+    cmp cx, 1
+    je FIN_SORT                ; Si solo 1 dato, terminar
+    
+    ; Inicializar array_BS con índices secuenciales [0,1,2,...,contador-1]
+    mov si, 0
+    mov ax, 0
+INICIALIZAR_INDICES:
+    mov array_BS[si], ax
+    add si, 2
+    inc ax
+    loop INICIALIZAR_INDICES
+
+    ; Bubble sort para ordenar índices
+    mov al, contador           ; Cargar contador (8 bits)
+    mov ah, 0
+    mov cx, ax
+    dec cx                     ; n-1 iteraciones externas
+    
+EXTERNO_LOOP:
+    push cx                    ; Guardar contador externo
+    mov si, 0                  ; Índice para array_BS
+    
+    ; Calcular límite para loop interno (contador-1)
+    mov al, contador
+    mov ah, 0
+    mov cx, ax
+    dec cx
+    
+INTERNO_LOOP:
+    ; Obtener índices actual y siguiente
+    mov ax, array_BS[si]       ; índice i
+    mov bx, array_BS[si+2]     ; índice j
+    
+    ; Comparar partes enteras primero
+    mov di, ax
+    shl di, 1                  ; multiplicar por 2 (word size)
+    mov dx, array_enteros[di]  ; entero[i]
+    
+    mov di, bx
+    shl di, 1                  ; multiplicar por 2 (word size)
+    mov bp, array_enteros[di]  ; entero[j]
+    
+    cmp dx, bp
+    jg SWAP_INDICES            ; Si entero[i] > entero[j], intercambiar
+    jl NO_SWAP                 ; Si entero[i] < entero[j], no intercambiar
+    
+    ; Si enteros son iguales, comparar decimales
+    mov di, ax
+    shl di, 1                  ; multiplicar por 2
+    mov dx, array_decimales[di] ; decimal[i]
+    
+    mov di, bx  
+    shl di, 1                  ; multiplicar por 2
+    mov bp, array_decimales[di] ; decimal[j]
+    
+    cmp dx, bp
+    jg SWAP_INDICES            ; Si decimal[i] > decimal[j], intercambiar
+    jmp NO_SWAP                ; Si decimal[i] <= decimal[j], no intercambiar
+
+SWAP_INDICES:
+    ; Intercambiar índices en array_BS
+    mov ax, array_BS[si]
+    mov bx, array_BS[si+2]
+    mov array_BS[si], bx
+    mov array_BS[si+2], ax
+
+NO_SWAP:
+    add si, 2                  ; Avanzar al siguiente par
+    loop INTERNO_LOOP
+    
+    pop cx                     ; Recuperar contador externo
+    loop EXTERNO_LOOP
+    
+FIN_SORT:
+    ret
+BUBBLE_SORT_INDICES ENDP             
 
 END START
