@@ -38,7 +38,7 @@ array_decimales DW max_estudiantes * 2 dup(0)                   ; Parte fraccion
 temp_entero     DW 0                                            ; Almacena temporalmente la parte entera durante el parsing. 
 temp_decimal    DW 2 dup(0)                                     ; Almacena temporalmente la parte decimal durante el parsing.
 flag_decimal    DB 0                                            ; Flag al encontrar el punto decimal. 
-  
+temp_index DB 0  
 ; Contadores de aprobaciones
 contador_aprobados      DB 0
 contador_desaprobados   DB 0            
@@ -216,7 +216,9 @@ PuedeAgregar:
 FinAgregar:
     POP AX
     RET
-    
+
+IntentarAgregar ENDP
+
 ProcesarEntrada PROC
     PUSH AX
     PUSH BX
@@ -293,8 +295,6 @@ PedirCalif:
     POP AX
     JMP MenuPrincipal
 ProcesarEntrada ENDP
-
-IntentarAgregar ENDP
 
 RellenadoFracc PROC                                                 ; Modifica el buffer de calificaciones para que cumpla con el formato fraccionario.
     PUSH AX
@@ -384,68 +384,72 @@ RellenadoFracc ENDP
 BusquedaPorID PROC
     CALL LimpiarPantalla
 
-    ; TÃ­tulo de la SecciÃ³n.
+    ; Título de la Sección.
     MOV AH, 09h
     LEA DX, msgT3
     INT 21h
 
-    ; Mensaje de bÃºsqueda.
+    ; Mensaje de búsqueda.
     MOV AH, 09h
     LEA DX, msgPedirID
     INT 21h
     
     ; Lectura del ID ingresado. 
-    MOV buffer_id, 3                                               ; MÃ¡x 2 dÃ­gitos (+Enter).
+    MOV buffer_id, 3          ; Máx 2 dígitos (+Enter)
     LEA DX, buffer_id
-    MOV AH, 0Ah                                                    ; Lectura de Cadena.
+    MOV AH, 0Ah              ; Lectura de Cadena
     INT 21h
     
-    XOR AX, AX
-    XOR CX, CX
-    MOV BX, 10
-    LEA SI, buffer_id + 2                                           ; SI apunta al primer carÃ¡cter.
+    XOR AX, AX               ; Limpiar AX (acumulador)
+    XOR CX, CX               ; Limpiar CX
+    MOV BX, 10               ; Base 10
+    LEA SI, buffer_id + 2    ; SI apunta al primer carácter
 
-    ; VerificaciÃ³n si ID nulo.
-    MOV CL, buffer_id + 1
+    ; Verificación si ID nulo
+    MOV CL, buffer_id + 1    ; Número de caracteres leídos
     CMP CL, 0
     JE IDInvalidoBusqueda
 
 ConversionID:
-    MOV CL, [SI]                                                    ; Lectura de caracter.
-    INC SI                                                          ; Movimiento en el buffer para siguiente iteraciÃ³n.
+    MOV CL, [SI]             ; Lectura de caracter
+    INC SI                   ; Siguiente posición
     
-    CMP CL, 13                                                      ; Verificar si es Enter (fin).
+    CMP CL, 13               ; Verificar si es Enter (fin)
     JE ValidacionID
     
-    ; Verifica que sea un dÃ­gito. 
+    ; Verifica que sea un dígito
     CMP CL, '0'
     JL IDInvalidoBusqueda
     CMP CL, '9'
     JG IDInvalidoBusqueda
     
-    ; Convertir a nÃºmero y recordar.
-    SUB CL, '0'                                                     ; ConversiÃ³n ASCII.
-    MOV DX, BX                                                      ; DX = 10.
-    MUL DX                                                          ; AX *= 10.
-    JC IDInvalidoBusqueda                                           ; Overflow : error.
-    ADD AX, CX                                                      ; AX = AX * 10 + nuevo dÃ­giro (CL)
-    JC IDInvalidoBusqueda                                           ; Overflow : error.
+    ; Convertir a número
+    SUB CL, '0'              ; Conversión ASCII a número
+    MOV DX, BX               ; DX = 10
+    MUL DX                   ; AX = AX * 10
+    JC IDInvalidoBusqueda    ; Overflow: error
     
-    JMP ConversionID                                                ; Itera hasta ENTER.
+    ; ¡CORRECCIÓN CRÍTICA AQUÍ!
+    ADD AL, CL               ; Sumar el nuevo dígito (8 bits)
+    ADC AH, 0                ; Ajustar carry si es necesario
+    JC IDInvalidoBusqueda    ; Overflow: error
+    
+    JMP ConversionID         ; Itera hasta ENTER
 
 ValidacionID:
-    ; Validar rango. 
+    ; Validar rango
     CMP AX, 1
-    JL IDInvalidoBusqueda                                           ; Si es menor que 1 : invÃ¡lido.
+    JL IDInvalidoBusqueda    ; Si es menor que 1: inválido
     
-    ; ComparaciÃ³n con lÃ­mite superior.
-    XOR BX, BX                                                      ; BL = contador ---> BL = BX.
+    ; Comparación con límite superior
+    XOR BX, BX
     MOV BL, contador
     CMP AX, BX
-    JG IDInvalidoBusqueda                                           ; Si es mayor que contador : invÃ¡lido.
+    JG IDInvalidoBusqueda    ; Si es mayor que contador: inválido
     
-    ; Convertir a Ã­ndice base 0.
+    ; Convertir a índice base 0
     DEC AX
+    MOV temp_index, AL       ; Guardar índice temporalmente
     
     MOV AH, 09h
     LEA DX, nueva_linea
@@ -455,13 +459,15 @@ ValidacionID:
     LEA DX, msgSeparador
     INT 21h
 
+    ; Cargar índice y mostrar
+    MOV AL, temp_index
     CALL MostarPorID
 
     MOV AH, 09h
     LEA DX, msgSeparador
     INT 21h
     
-    ; Volver a menÃº.
+    ; Volver a menú
     MOV AH, 09h
     LEA DX, msgContinuar
     INT 21h
@@ -470,10 +476,11 @@ ValidacionID:
     RET
     
 IDInvalidoBusqueda:
-    ; ID ingresado invÃ¡lido y volver a menÃº.
+    ; ID ingresado inválido
     MOV AH, 09h
     LEA DX, msgIDInvalido
     INT 21h
+    MOV AH, 09h
     LEA DX, msgContinuar
     INT 21h
     MOV AH, 01h
@@ -540,7 +547,7 @@ MostarPorID ENDP
 MostrarListaCompleta PROC
     CALL LimpiarPantalla
 
-    ; TÃ­tulo de la SecciÃ³n.
+    ; Título de la Sección.
     MOV AH, 09h
     LEA DX, msgT5
     INT 21h
@@ -559,20 +566,25 @@ MostrarListaCompleta PROC
     JE ListaVacia
     
     ; Recorrer todos los estudiantes
-    XOR AX, AX
+    XOR CX, CX                   ; CX = 0 (contador de estudiantes)
     
 MostrarEstudiante:
-    PUSH AX
+    ; Guardar contador
+    PUSH CX
+    
+    ; Pasar índice a AL y llamar a MostarPorID
+    MOV AL, CL
     CALL MostarPorID
-    POP AX
+    
+    POP CX
     
     MOV AH, 09h
     LEA DX, nueva_linea
     INT 21h
 
-    ; Verificar el nÃºmero de estudiantes mostrados.
-    INC AL
-    CMP AL, contador
+    ; Verificar el número de estudiantes mostrados.
+    INC CL
+    CMP CL, contador
     JL MostrarEstudiante
     
     JMP FinMostrar
