@@ -4,7 +4,7 @@
 .DATA
 tam_nombre          EQU 30                                      ; Tama√±o m√°ximo para el nombre del estudiante. 
 tam_calif           EQU 10                                      ; Tama√±o m√°ximo para la calificaci√≥n. 
-max_estudiantes     EQU 3                                       ; N√∫mero m√°ximo de estudiantes en el registro.
+max_estudiantes     EQU 15                                       ; N√∫mero m√°ximo de estudiantes en el registro.
 contador            DB 0                                        ; Registro de estudiantes ingresados. 
 
 ; ---< Buffers >---
@@ -384,18 +384,18 @@ RellenadoFracc ENDP
 BusquedaPorID PROC
     CALL LimpiarPantalla
 
-    ; TÌtulo de la SecciÛn.
+    ; TÔøΩtulo de la SecciÔøΩn.
     MOV AH, 09h
     LEA DX, msgT3
     INT 21h
 
-    ; Mensaje de b˙squeda.
+    ; Mensaje de bÔøΩsqueda.
     MOV AH, 09h
     LEA DX, msgPedirID
     INT 21h
     
     ; Lectura del ID ingresado. 
-    MOV buffer_id, 3          ; M·x 2 dÌgitos (+Enter)
+    MOV buffer_id, 3          ; MÔøΩx 2 dÔøΩgitos (+Enter)
     LEA DX, buffer_id
     MOV AH, 0Ah              ; Lectura de Cadena
     INT 21h
@@ -403,34 +403,34 @@ BusquedaPorID PROC
     XOR AX, AX               ; Limpiar AX (acumulador)
     XOR CX, CX               ; Limpiar CX
     MOV BX, 10               ; Base 10
-    LEA SI, buffer_id + 2    ; SI apunta al primer car·cter
+    LEA SI, buffer_id + 2    ; SI apunta al primer carÔøΩcter
 
-    ; VerificaciÛn si ID nulo
-    MOV CL, buffer_id + 1    ; N˙mero de caracteres leÌdos
+    ; VerificaciÔøΩn si ID nulo
+    MOV CL, buffer_id + 1    ; NÔøΩmero de caracteres leÔøΩdos
     CMP CL, 0
     JE IDInvalidoBusqueda
 
 ConversionID:
     MOV CL, [SI]             ; Lectura de caracter
-    INC SI                   ; Siguiente posiciÛn
+    INC SI                   ; Siguiente posiciÔøΩn
     
     CMP CL, 13               ; Verificar si es Enter (fin)
     JE ValidacionID
     
-    ; Verifica que sea un dÌgito
+    ; Verifica que sea un dÔøΩgito
     CMP CL, '0'
     JL IDInvalidoBusqueda
     CMP CL, '9'
     JG IDInvalidoBusqueda
     
-    ; Convertir a n˙mero
-    SUB CL, '0'              ; ConversiÛn ASCII a n˙mero
+    ; Convertir a nÔøΩmero
+    SUB CL, '0'              ; ConversiÔøΩn ASCII a nÔøΩmero
     MOV DX, BX               ; DX = 10
     MUL DX                   ; AX = AX * 10
     JC IDInvalidoBusqueda    ; Overflow: error
     
-    ; °CORRECCI”N CRÕTICA AQUÕ!
-    ADD AL, CL               ; Sumar el nuevo dÌgito (8 bits)
+    ; ÔøΩCORRECCIÔøΩN CRÔøΩTICA AQUÔøΩ!
+    ADD AL, CL               ; Sumar el nuevo dÔøΩgito (8 bits)
     ADC AH, 0                ; Ajustar carry si es necesario
     JC IDInvalidoBusqueda    ; Overflow: error
     
@@ -439,17 +439,17 @@ ConversionID:
 ValidacionID:
     ; Validar rango
     CMP AX, 1
-    JL IDInvalidoBusqueda    ; Si es menor que 1: inv·lido
+    JL IDInvalidoBusqueda    ; Si es menor que 1: invÔøΩlido
     
-    ; ComparaciÛn con lÌmite superior
+    ; ComparaciÔøΩn con lÔøΩmite superior
     XOR BX, BX
     MOV BL, contador
     CMP AX, BX
-    JG IDInvalidoBusqueda    ; Si es mayor que contador: inv·lido
+    JG IDInvalidoBusqueda    ; Si es mayor que contador: invÔøΩlido
     
-    ; Convertir a Ìndice base 0
+    ; Convertir a ÔøΩndice base 0
     DEC AX
-    MOV temp_index, AL       ; Guardar Ìndice temporalmente
+    MOV temp_index, AL       ; Guardar ÔøΩndice temporalmente
     
     MOV AH, 09h
     LEA DX, nueva_linea
@@ -459,7 +459,7 @@ ValidacionID:
     LEA DX, msgSeparador
     INT 21h
 
-    ; Cargar Ìndice y mostrar
+    ; Cargar √çndice y mostrar
     MOV AL, temp_index
     CALL MostarPorID
 
@@ -467,7 +467,7 @@ ValidacionID:
     LEA DX, msgSeparador
     INT 21h
     
-    ; Volver a men˙
+    ; Volver a menÔøΩ
     MOV AH, 09h
     LEA DX, msgContinuar
     INT 21h
@@ -476,7 +476,7 @@ ValidacionID:
     RET
     
 IDInvalidoBusqueda:
-    ; ID ingresado inv·lido
+    ; ID ingresado invÔøΩlido
     MOV AH, 09h
     LEA DX, msgIDInvalido
     INT 21h
@@ -505,14 +505,29 @@ MostarPorID PROC                                                    ; AL = √≠ndi
     
     ; Mostar ID del estudiante. 
     MOV AH, 02h
-    MOV DL, tabulador
+    MOV DL, 09h
     INT 21h
+
+    ; Verificar si es mayor a 9
     MOV DL, BL
-    ADD DL, '1'                                                     ; Conversi√≥n a base 1 del ID.
+    INC DL
+    CMP DL, 10                                                       ; Verificar cantidad de d√≠gitos al comparar con 10. 
+    JB  UnDigito
+
+    ; Con dos d√≠gitos mostrar "1" y luego unidad.
+    PUSH DX
+    MOV DL, '1'
     INT 21h
+    POP DX
+    SUB DL, 10                                                      ; DL(unidad) = DL(√≠nidice) - 10
+
+UnDigito:
+    ADD DL, '0'                                                     ; Convertir a ASCII. 
+    INT 21h
+
     MOV DL, '.'
     INT 21h
-    MOV DL, tabulador
+    MOV DL, 09h
     INT 21h
     
     ; Mostrar Nombre.
@@ -547,7 +562,7 @@ MostarPorID ENDP
 MostrarListaCompleta PROC
     CALL LimpiarPantalla
 
-    ; TÌtulo de la SecciÛn.
+    ; TÔøΩtulo de la SecciÔøΩn.
     MOV AH, 09h
     LEA DX, msgT5
     INT 21h
@@ -572,7 +587,7 @@ MostrarEstudiante:
     ; Guardar contador
     PUSH CX
     
-    ; Pasar Ìndice a AL y llamar a MostarPorID
+    ; Pasar ÔøΩndice a AL y llamar a MostarPorID
     MOV AL, CL
     CALL MostarPorID
     
@@ -582,7 +597,7 @@ MostrarEstudiante:
     LEA DX, nueva_linea
     INT 21h
 
-    ; Verificar el n˙mero de estudiantes mostrados.
+    ; Verificar el nÔøΩmero de estudiantes mostrados.
     INC CL
     CMP CL, contador
     JL MostrarEstudiante
