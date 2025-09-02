@@ -70,9 +70,10 @@ msgMenu     DB 13, 10, '-------------< CE1106 - SISTEMA DE REGISTRO >-----------
             DB         'Ingrese opcion: $'
 
 ; Mensajes [1]
-msgT1           DB 13, 10, '[ AGREGAR ESTUDIANTE ]', 13, 10, '$'
-msgPedirNombre  DB 13, 10, 'Ingrese nombre completo del estudiante: $'
-msgPedirNota    DB 13, 10, 'Ingrese la calificacion del estudiante: $'
+msgT1               DB 13, 10, '[ AGREGAR ESTUDIANTE ]', 13, 10, '$'
+msgPedirNombre      DB 13, 10, 'Ingrese nombre completo del estudiante: $'
+msgPedirNota        DB 13, 10, 'Ingrese la calificacion del estudiante: $'
+msgCalifInvalida    DB 13, 10, 'Error! La calificacion no cuenta con el formato adecuado... Intente nuevamente...', 13, 10,'$'
 
 ; Mensajes [2]
 msgT2               DB 13, 10, '[ ESTADISTICAS ]', 13, 10, '$'
@@ -242,7 +243,7 @@ IntentarAgregar PROC
 
     CALL LimpiarPantalla
 
-    ; TÃ­tulo de la SecciÃ³n.
+    ; Título de la Sección.
     MOV AH, 09h
     LEA DX, msgT1
     INT 21h
@@ -250,7 +251,7 @@ IntentarAgregar PROC
     ; Verifica si hay espacio suficiente.
     MOV AL, contador
     CMP AL, max_estudiantes
-    JL  ProcesarEntrada                                            ; SÃ­ puede agregar estudiante (contador < max_estudiantes).
+    JL  ProcesarEntrada                                            ; Sí puede agregar estudiante (contador < max_estudiantes).
     
     ; Espacio insuficiente. 
     MOV AH, 09h
@@ -261,7 +262,7 @@ IntentarAgregar PROC
     MOV AH, 01h
     INT 21h
 
-    ; Retorna a MenÃº Principal.
+    ; Retorna a Menú Principal.
     JMP FinAgregar
     
 PuedeAgregar:
@@ -288,20 +289,20 @@ PedirNombre:
     INT 21h
     
     ; Leer entrada del nombre. 
-    MOV buffer_nombre, tam_nombre                                   ; Establecer tamaÃ±o del buffer en [0].
+    MOV buffer_nombre, tam_nombre                                   ; Establecer tamaño del buffer en [0].
     LEA DX, buffer_nombre                                           ; DX apunta al buffer de entrada. 
     MOV AH, 0Ah
     INT 21h
     
-    ; TerminaciÃ³n '$' para compatibilidad con DOS.
+    ; Terminación '$' para compatibilidad con DOS.
     XOR BX, BX                                                      ; Limpiar BX.
-    MOV BL, buffer_nombre[1]                                        ; BL = nÃºmero de caracteres leÃ­dos.
+    MOV BL, buffer_nombre[1]                                        ; BL = número de caracteres leídos.
     MOV buffer_nombre[BX+2], '$'                                    ; Agregar '$'. 
     
-    ; Calcular posiciÃ³n de destino. 
+    ; Calcular posición de destino. 
     XOR AX, AX
     MOV AL, contador
-    MOV BL, tam_nombre+1                                            ; BL = tamaÃ±o de cada entrada (incluye terminador).
+    MOV BL, tam_nombre+1                                            ; BL = tamaño de cada entrada (incluye terminador).
     MUL BL                                                          ; AX (deslpazamiento) = contador * (tam_nombre+1)
     LEA DI, lista_nombres
     ADD DI, AX                                                      ; DI (destino en lista) = deslpazamiento + inicio 
@@ -309,21 +310,35 @@ PedirNombre:
     CALL CopiarCadena                                               ; Copiar cadena en lista. 
 
 PedirCalif:
-    ; Pedir calificaciÃ³n del estudiante.
+    ; Pedir calificación del estudiante.
     MOV AH, 09h
     LEA DX, msgPedirNota
     INT 21h
 
-    ; Leer entrada de calificaciÃ³n. 
+ValidarCalif:
+    ; Leer entrada de calificación. 
     MOV buffer_calif, tam_calif
     LEA DX, buffer_calif
     MOV AH, 0Ah
     INT 21h
 
-    ; Rellenado del nÃºmero con 5 decimales. 
-    CALL RellenadoFracc
+    ; Validar formato numérico y formatear
+    CALL FormatoCalif
+    JC  ErrorCalif
+
+    CALL VerifCien
+
+    JMP CalificacionValida
     
-    ; Copiar calificaciÃ³n en lista.
+ErrorCalif:
+    ; Mostrar mensaje de error y volver a pedir.
+    MOV AH, 09h
+    LEA DX, msgCalifInvalida
+    INT 21h
+    JMP PedirCalif  
+
+CalificacionValida:
+    ; Copiar calificación en lista.
     XOR AX, AX
     MOV AL, contador
     MOV BL, tam_calif+1
@@ -336,7 +351,7 @@ PedirCalif:
     ; Incrementar contador.
     INC contador
     
-    ; Salto de lÃ­nea. 
+    ; Salto de línea. 
     MOV AH, 09h
     LEA DX, nueva_linea
     INT 21h
@@ -350,7 +365,7 @@ PedirCalif:
     JMP MenuPrincipal
 ProcesarEntrada ENDP
 
-RellenadoFracc PROC                                                 ; Modifica el buffer de calificaciones para que cumpla con el formato fraccionario.
+FormatoCalif PROC                                                   ; Formatea la calificación para un formato adecuado.
     PUSH AX
     PUSH BX
     PUSH CX
@@ -358,73 +373,112 @@ RellenadoFracc PROC                                                 ; Modifica e
     PUSH SI
     PUSH DI
     
-    LEA SI, buffer_calif+2                                          ; SI = inicio de la cadena de entrada.
-    XOR DI, DI                                                       ; DI = flag punto decimal encontrado.
-    XOR BX, BX                                                       ; BX = contador de parte fraccionaria.
+    LEA SI, buffer_calif+2
+    XOR DI, DI
+    XOR BX, BX
+    XOR CX, CX
+    MOV DX, 10
     
-BuscarPunto:                                                        ; Loop para determinar la parte fraccionaria. 
-    ; Lectura de caracteres hasta el punto.
+ValidarLoop:                                                        ; Validación de caracteres numéricos.
     MOV AL, [SI]
     
-    CMP AL, '$'
-    JE  AgregarPuntoYDecimales                                      ; Fin de la cadena por terminador '$'.
-    CMP AL, 13
-    JE  AgregarPuntoYDecimales                                      ; Fin de la cadena por ENTER.
-    CMP AL, '.'
-    JE  EncontrarPunto                                               ; Se encontro el punto.
+    CMP AL, '$'                 ; Fin de cadena
+    JE  IniciarFormato          ; Saltar directamente al formateo
+    CMP AL, 13                  ; Fin (Enter)
+    JE  IniciarFormato          ; Saltar directamente al formateo
+    CMP AL, '.'                 ; ¿Es punto decimal?
+    JE  PuntoValido
+    
+    ; --- Validar que sea dígito ---
+    CMP AL, '0'
+    JL  ErrorFormato
+    CMP AL, '9'
+    JG  ErrorFormato
+    
+    ; --- Validar máximo 5 decimales ---
+    CMP DI, 1                   ; ¿Ya estamos en parte decimal?
+    JNE SaltarValidacion        ; Si no, saltar validación de decimales
+    
+    INC BX                      ; Incrementar contador de decimales
+    CMP BX, 6                   ; ¿Más de 5 decimales?
+    JG ErrorFormato
 
-    ; Siguiente caracter.
+SaltarValidacion:
+    INC SI
+    JMP ValidarLoop
+
+PuntoValido:
+    INC DI                      ; Marcar que encontramos punto
+    CMP DI, 1                   ; ¿Es el primer punto?
+    JNE ErrorFormato            ; Si no, error (múltiples puntos)
+    INC SI
+    JMP ValidarLoop
+
+ErrorFormato:
+    STC
+    JMP FinFormato
+
+IniciarFormato:
+    LEA SI, buffer_calif+2      ; Reiniciar SI al inicio
+    XOR DI, DI                  ; Reiniciar flag de punto
+    XOR BX, BX                  ; Reiniciar contador de decimales
+    
+BuscarPunto:
+    MOV AL, [SI]
+    CMP AL, '$'                 ; Fin de cadena
+    JE  AgregarPuntoYDecimales
+    CMP AL, 13                  ; Fin (Enter)
+    JE  AgregarPuntoYDecimales
+    CMP AL, '.'                 ; ¿Es punto?
+    JE  EncontrarPunto
     INC SI
     JMP BuscarPunto
 
 EncontrarPunto:
-    MOV DI, 1                                                        ; Raise Flag...
-    INC SI                                                           ; Avanzar al primer decimal.
+    MOV DI, 1                   ; Marcar punto encontrado
+    INC SI                      ; Saltar el punto
     
 ContarDecimales:
-    ; Loop para determinar cantidad de decimales a rellenar. 
     MOV AL, [SI]
-    CMP AL, '$'
+    CMP AL, '$'                 ; Fin de cadena
     JE  Rellenar
-    CMP AL, 13
+    CMP AL, 13                  ; Fin (Enter)
     JE  Rellenar
-    INC BX                                                           ; Incrementar contador de decimales leÃ­dos. 
+    INC BX                      ; Contar dígito decimal
     INC SI
     JMP ContarDecimales
 
 Rellenar:
-    ; Revisar si hay parte fraccionaria. 
-    CMP DI, 0
-    JE  AgregarPuntoYDecimales
+    CMP DI, 0                   ; ¿No se encontró punto?
+    JE  AgregarPuntoYDecimales  ; Si no, agregar punto y ceros
     
-    ; Calcular ceros.                                                ; ActualizaciÃ³n de CX como futuro registro de ctrl.
     MOV CX, 5
-    SUB CX, BX
-    JLE FinRelleno                                                  ; Finalizar si 5 o mÃ¡s decimales.
+    SUB CX, BX                  ; CX = ceros faltantes
+    JLE FinFormatoOk            ; Si ya tiene 5+ decimales, terminar
 
-    ; Loop para agregar los ceros. 
     MOV AL, '0'
 AgregarCeroLoop:
-    MOV [SI], AL
+    MOV [SI], AL                ; Agregar cero
     INC SI
     LOOP AgregarCeroLoop
+    MOV BYTE PTR [SI], '$'      ; Terminar cadena
+    JMP FinFormatoOk
 
-    MOV BYTE PTR [SI], '$'                                            ; Terminar la cadena
-    JMP FinRelleno
-
-AgregarPuntoYDecimales:                                               ; EspecÃ­fico para nÃºmeros que solo tienen parte entera. 
-    MOV BYTE PTR [SI], '.'                                            ; Agregar punto
+AgregarPuntoYDecimales:
+    MOV BYTE PTR [SI], '.'      ; Agregar punto
     INC SI
-
-    MOV CX, 5                                                         ; Indice para 5 iteraciones. 
+    MOV CX, 5                   ; 5 ceros
     MOV AL, '0'
 AgregarTodosCeros:
-    MOV [SI], AL
+    MOV [SI], AL                ; Agregar cero
     INC SI
     LOOP AgregarTodosCeros
-    MOV BYTE PTR [SI], '$'
+    MOV BYTE PTR [SI], '$'      ; Terminar cadena
 
-FinRelleno:
+FinFormatoOk:
+    CLC                         ; Clear Carry Flag = éxito
+
+FinFormato:
     POP DI
     POP SI
     POP DX
@@ -432,7 +486,85 @@ FinRelleno:
     POP BX
     POP AX
     RET
-RellenadoFracc ENDP
+FormatoCalif ENDP
+
+VerifCien PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH SI
+    
+    LEA SI, buffer_calif+2      ; SI apunta al inicio de los datos
+    XOR CX, CX                  ; CX = acumulador parte entera
+    MOV BX, 10                  ; BX = base 10
+    
+CalcularEntero:
+    MOV AL, [SI]                ; Leer carácter
+    CMP AL, '$'                 ; Fin de cadena
+    JE  VerificarCien
+    CMP AL, 13                  ; Fin (Enter)
+    JE  VerificarCien
+    CMP AL, '.'                 ; Punto decimal ? fin de parte entera
+    JE  VerificarCien
+    
+    ; Verificar que sea dígito
+    CMP AL, '0'
+    JL  FinVerifCien             ; Si no es dígito, salir
+    CMP AL, '9'
+    JG  FinVerifCien             ; Si no es dígito, salir
+    
+    ; Acumular parte entera
+    SUB AL, '0'                 ; Convertir a número
+    MOV AH, 0
+    PUSH AX
+    MOV AX, CX
+    MUL BX                      ; CX = CX * 10
+    MOV CX, AX
+    POP AX
+    ADD CX, AX                  ; CX = CX + dígito
+    
+    INC SI
+    JMP CalcularEntero
+
+VerificarCien:
+    ; Verificar si la parte entera es >= 100
+    CMP CX, 100
+    JL  FinVerifCien             ; Si es menor que 100, no hacer nada
+    
+    ; --- FORZAR A 100.00000 ---
+    LEA SI, buffer_calif+2      ; Reiniciar al inicio del buffer
+    
+    ; Escribir "100.00000"
+    MOV BYTE PTR [SI], '1'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '.'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '$'
+    
+    ; Actualizar longitud en el buffer
+    MOV buffer_calif[1], 9      ; 9 caracteres: "100.00000"
+
+FinVerifCien:
+    POP SI
+    POP CX
+    POP BX
+    POP AX
+    RET
+VerifCien ENDP     
 
 ; ---< Buscar Estudiante por ID >--- 
 BusquedaPorID PROC
