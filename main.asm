@@ -46,7 +46,7 @@ contador_desaprobados   DB 0
 ; Bubble Sort 
 ; Array que contiene indices resultantes de un Bubble Sort
 array_BS   DW max_estudiantes dup(0)
-orden            DB 0 ; ASC = 1, DSC = 0   
+orden            DB 1 ; ASC = 1, DSC = 0   
 
 ; Buffers para datos ordenados
 buffer_nombres_ordenados DB max_estudiantes * (tam_nombre + 1) DUP('$')
@@ -80,7 +80,9 @@ msgDebug            DB 13, 10, 'Procesado: $'
 msgNoStats          DB 13, 10, 'No hay estudiantes registrados en el sistema...', 13, 10, '$'
 msgPorcAprobados    DB 13, 10, 'Porcentaje de aprobados: $'
 msgPorcReprobados   DB 13, 10, 'Porcentaje de reprobados: $'
-
+msgMaxNota          DB 13, 10, 'El estudiante con mayor nota es: $'
+msgMinNota          DB 13, 10, 'El estudiante con menor nota es: $'
+msgMaxMin           DB 13, 10, 'Se presentaran datos de notas mayores y menores en orden de ID, Nombre y Nota.$'
 ; Mensajes [3]
 msgT3               DB 13, 10, '[ BUSQUEDA POR ID ]', 13, 10, '$'
 msgPedirID          DB 13, 10, 'Ingrese el ID del estudiante: $'
@@ -170,8 +172,30 @@ Opcion1:
     RET
 
 Opcion2:
+    CALL LimpiarPantalla
     CALL separar_numeros_func
+    
+    ; preparar registros para la rutina
+    LEA BX, array_enteros     ; BX = base de enteros
+    LEA SI, array_decimales   ; SI = base de decimales
+    MOV CX, max_estudiantes   ; cantidad de elementos  
+    
+    ; array_BS almacena orden.
+    CALL BUBBLE_SORT_INDICES
+    
+    CALL ordenarListas     
+
     CALL MostrarEstadisticas
+                            
+    MOV AH, 09h
+    LEA DX, msgMaxMin
+    INT 21h
+                            
+    CALL generar_Max_Min 
+    
+    
+    JMP FinEstadisticas
+    
     RET
 
 Opcion3:
@@ -667,10 +691,12 @@ MostrarEstadisticas PROC
     MOV AH, 09h
     LEA DX, msgNoStats
     INT 21h
-    JMP FinEstadisticas
 
 MostrarStats:
     CALL calcular_porcentajes
+    RET
+
+MostrarEstadisticas ENDP 
 
 FinEstadisticas:
     MOV AH, 09h
@@ -679,7 +705,6 @@ FinEstadisticas:
     MOV AH, 01h
     INT 21h 
     RET
-MostrarEstadisticas ENDP
 
 ; ---< Ordenar Calificaciones >---
 OrdenarCalif PROC
@@ -1309,5 +1334,58 @@ reordenar:
     pop ax
     ret
 ordenarListas ENDP
+
+generar_Max_Min PROC   
+    mov al, orden
+    cmp al, 1
+    je  desc
+    cmp al, 0
+    je  asce 
+    RET
+
+generar_Max_Min ENDP
+
+desc:
+    ;Datos organizados de forma descendente
+    
+    ;Primer dato es el maximo
+    mov ah, 9
+    lea dx, msgMaxNota
+    int 21h
+    
+    mov al, contador
+    dec al
+    CALL MostarPorID 
+    
+    ;Ultimo dato es el minimo
+    mov ah, 9
+    lea dx, msgMinNota
+    int 21h
+    
+    mov al, 1
+    dec al
+    CALL MostarPorID 
+    RET
+asce:
+    ;Datos organizados de forma ascendente 
+    
+    ;Primer dato es el minimo 
+    mov ah, 9
+    lea dx, msgMinNota
+    int 21h
+    
+    mov al, contador
+    dec al
+    CALL MostarPorID 
+    
+    ;Ultimo dato es el maximo
+    mov ah, 9
+    lea dx, msgMaxNota
+    int 21h
+    
+    mov al, 1  
+    dec al
+    CALL MostarPorID
+    RET
 
 END START
