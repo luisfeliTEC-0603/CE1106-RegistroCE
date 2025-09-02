@@ -21,7 +21,7 @@ promedio_ponderado DW 0
                          
 ; ---< Buffers >---
 ; [Tam mÃ¡ximo][Caracts leÃ­dos][Buffer]
-; [0]: TamaÃ±o mÃ¡ximo de la entrada.
+; [0]: Tamaño mÃ¡ximo de la entrada.
 ; [1]: NÃºmero real de caracteres leÃ­dos.
 ; [2]: Buffer de almaenamiento. 
 
@@ -662,32 +662,11 @@ FinEstadisticas:
     RET
 MostrarEstadisticas ENDP 
 
-
-
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-         
-
-
+     
 
 ; --------------------------------------
 ; CALCULAR PROMEDIO PONDERADO (VERSIÓN OPTIMIZADA)
 ; --------------------------------------
-
-; Después de calcular_porcentajes, agregar:
 calcular_ponderado PROC
     MOV CL, contador
     CMP CL, 0
@@ -718,36 +697,55 @@ ciclo_suma:
     INT 21h
     
     MOV AX, promedio_ponderado
-    CALL print_num          ; Usar el procedimiento existente
+    CALL print_num_sin_porcentaje    ; ? NUEVO procedimiento
     
 fin_calculo_ponderado:
     RET
 calcular_ponderado ENDP
 
+; --------------------------------------
+; Entrada: AX = número a imprimir
+; --------------------------------------
+print_num_sin_porcentaje PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
 
+    MOV CX, 0          ; contador de dígitos
+    MOV BX, 10         ; divisor para decimal
 
+    ; Caso especial: si AX = 0, imprimir '0'
+    CMP AX, 0
+    JNE conv_loop_sin
+    MOV DL, '0'
+    MOV AH, 02h
+    INT 21h
+    JMP fin_print_sin
 
+conv_loop_sin:
+    XOR DX, DX
+    DIV BX            ; AX / 10 ? cociente en AX, residuo en DX
+    PUSH DX           ; guardar residuo (dígito)
+    INC CX
+    CMP AX, 0
+    JNE conv_loop_sin
 
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
+print_digit_sin:
+    POP DX
+    ADD DL, '0'       ; convertir dígito a ASCII
+    MOV AH, 02h
+    INT 21h
+    LOOP print_digit_sin
+
+fin_print_sin:
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+print_num_sin_porcentaje ENDP
+
 
 
 
