@@ -504,14 +504,14 @@ IDInvalidoBusqueda:
     RET
 BusquedaPorID ENDP
 
-MostarPorID PROC                                                    ; AL = Ã­ndice del estudiante (base 0).
+MostarPorID PROC                                                    ; AL = índice del estudiante (base 0).
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
     PUSH SI
     
-    ; Comparar Ã­ndice con nÃºmero de estudiantes. 
+    ; Comparar índice con número de estudiantes. 
     CMP AL, contador
     JGE IDInvalidoBusqueda
     
@@ -521,19 +521,34 @@ MostarPorID PROC                                                    ; AL = Ã­ndi
     
     ; Mostar ID del estudiante. 
     MOV AH, 02h
-    MOV DL, tabulador
+    MOV DL, 09h
     INT 21h
+
+    ; Verificar si es mayor a 9
     MOV DL, BL
-    ADD DL, '1'                                                     ; ConversiÃ³n a base 1 del ID.
+    INC DL
+    CMP DL, 10                                                       ; Verificar cantidad de dígitos al comparar con 10. 
+    JB  UnDigito
+
+    ; Con dos dígitos mostrar "1" y luego unidad.
+    PUSH DX
+    MOV DL, '1'
     INT 21h
+    POP DX
+    SUB DL, 10                                                      ; DL(unidad) = DL(ínidice) - 10
+
+UnDigito:
+    ADD DL, '0'                                                     ; Convertir a ASCII. 
+    INT 21h
+
     MOV DL, '.'
     INT 21h
-    MOV DL, tabulador
+    MOV DL, 09h
     INT 21h
     
     ; Mostrar Nombre.
     MOV AL, BL
-    MOV CL, tam_nombre + 1                                          ; CL = tamaÃ±o (+'$').
+    MOV CL, tam_nombre + 1                                          ; CL = tamaño (+'$').
     MUL CL                                                          ; AX (offset) = AL * CL.
     LEA SI, lista_nombres
     ADD SI, AX                                                      ; offset + inicio = destino. 
@@ -543,7 +558,7 @@ MostarPorID PROC                                                    ; AL = Ã­ndi
     MOV DL, 09h
     INT 21h
     
-    ; Mostrar calificaciÃ³n. 
+    ; Mostrar calificación. 
     MOV AL, BL
     MOV CL, tam_calif + 1
     MUL CL
