@@ -46,7 +46,15 @@ contador_desaprobados   DB 0
 ; Bubble Sort 
 ; Array que contiene indices resultantes de un Bubble Sort
 array_BS   DW max_estudiantes dup(0)
-orden            DB 0 ; ASC = 1, DSC = 0          
+orden            DB 0 ; ASC = 1, DSC = 0   
+
+; Buffers para datos ordenados
+buffer_nombres_ordenados DB max_estudiantes * (tam_nombre + 1) DUP('$')
+buffer_califs_ordenados  DB max_estudiantes * (tam_calif + 1) DUP('$')
+
+; Variables temporales
+temp_reg    DW 0      ; Para cálculos temporales
+source_ptr  DW 0      ; Para guardar puntero origen
 
 ; ---< Mensajes y Prompts del Sistema >---
 msgMenu     DB 13, 10, '-------------< CE1106 - SISTEMA DE REGISTRO >------------', 13, 10
@@ -171,6 +179,7 @@ Opcion3:
     RET
 
 Opcion4:
+    CALL LimpiarPantalla
     CALL separar_numeros_func
     
     call PREGUNTAR_ORDEN 
@@ -180,8 +189,13 @@ Opcion4:
     LEA SI, array_decimales   ; SI = base de decimales
     MOV CX, max_estudiantes   ; cantidad de elementos  
     
-    ;CALL OrdenarCalif  ; Aqui dira si es ASC o DES
+    ; array_BS almacena orden.
     CALL BUBBLE_SORT_INDICES
+    
+    CALL ordenarListas 
+    CALL MostrarListaCompleta
+        
+     
     RET
 
 Opcion5:
@@ -1180,6 +1194,120 @@ ERROR_INPUT:
 
 FIN_PREGUNTA:
     ret
-PREGUNTAR_ORDEN ENDP
+PREGUNTAR_ORDEN ENDP   
+
+
+
+                
+                
+; ================================
+; ordenarListas 
+; ================================
+ordenarListas PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push es
+    
+    push ds
+    pop es                   ; ES = DS
+    
+    ; PRIMERO: COPIAR TODO A BUFFERS (respaldo)
+    mov cl, contador
+    mov ch, 0
+    mov ax, tam_nombre + 1
+    mul cx
+    mov cx, ax
+    mov si, offset lista_nombres
+    mov di, offset buffer_nombres_ordenados
+    rep movsb
+    
+    mov cl, contador
+    mov ch, 0
+    mov ax, tam_calif + 1
+    mul cx
+    mov cx, ax
+    mov si, offset lista_califs
+    mov di, offset buffer_califs_ordenados
+    rep movsb
+    
+    ; SEGUNDO: REORDENAR COPIANDO DEL BUFFER AL ORIGINAL
+    mov cl, contador
+    mov ch, 0
+    mov si, 0                ; SI = índice para array_BS
+    
+reordenar:
+    mov bx, [array_BS + si]  ; BX = índice original
+    and bx, 00FFh            ; Asegurar 8 bits
+    
+    ; === COPIAR NOMBRE ===
+    ; DI = destino en lista original
+    mov ax, si               ; AX = posición en array_BS
+    shr ax, 1                ; AX = nueva posición (0, 1, 2...)
+    mov dl, tam_nombre + 1
+    mul dl
+    mov di, ax
+    add di, offset lista_nombres
+    
+    ; Calcular origen en buffer (usar DX como temporal)
+    mov ax, bx               ; AX = índice original
+    mov dl, tam_nombre + 1
+    mul dl
+    mov temp_reg, ax         ; Usar variable temporal
+    mov dx, temp_reg
+    add dx, offset buffer_nombres_ordenados
+    mov source_ptr, dx       ; Guardar en variable
+    
+    ; Copiar nombre
+    push cx
+    push si
+    mov cx, tam_nombre + 1
+    mov si, source_ptr       ; SI = origen desde variable
+    rep movsb                ; BUFFER -> ORIGINAL
+    pop si
+    pop cx
+    
+    ; === COPIAR CALIFICACIÓN ===
+    ; DI = destino en lista original
+    mov ax, si               ; AX = posición en array_BS
+    shr ax, 1                ; AX = nueva posición
+    mov dl, tam_calif + 1
+    mul dl
+    mov di, ax
+    add di, offset lista_califs
+    
+    ; Calcular origen en buffer (usar DX como temporal)
+    mov ax, bx               ; AX = índice original
+    mov dl, tam_calif + 1
+    mul dl
+    mov temp_reg, ax         ; Usar variable temporal
+    mov dx, temp_reg
+    add dx, offset buffer_califs_ordenados
+    mov source_ptr, dx       ; Guardar en variable
+    
+    ; Copiar calificación
+    push cx
+    push si
+    mov cx, tam_calif + 1
+    mov si, source_ptr       ; SI = origen desde variable
+    rep movsb                ; BUFFER -> ORIGINAL
+    pop si
+    pop cx
+    
+    add si, 2                ; Siguiente en array_BS
+    loop reordenar
+    
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+ordenarListas ENDP
 
 END START
