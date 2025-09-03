@@ -47,6 +47,7 @@ contador_desaprobados   DB 0
 ; Array que contiene indices resultantes de un Bubble Sort
 array_BS   DW max_estudiantes dup(0)
 orden            DB 1 ; ASC = 1, DSC = 0   
+resultado_dec DB ?   ; 1 = primero mayor, 0 = segundo mayor, 2 = iguales
 
 ; Buffers para datos ordenados
 buffer_nombres_ordenados DB max_estudiantes * (tam_nombre + 1) DUP('$')
@@ -1247,53 +1248,34 @@ INTERNO_LOOP:
     shl di, 1
     mov bp, array_enteros[di]
     
-    ; Comparación basada en el orden
-    cmp orden, 1
+    cmp orden, 0
     je ORDEN_ASC
     
-    ; ORDEN ASCENDENTE (ASC = 1) 
+    ; ========== ORDEN DESCENDENTE ==========
     cmp dx, bp
-    jg NO_SWAP                
-    jl SWAP_INDICES           
-    jmp COMPARE_DECIMALES_ASC
+    jl NO_SWAP                ; entero[i] < entero[j] ? OK
+    jg SWAP_INDICES           ; entero[i] > entero[j] ? SWAP
+    ; si iguales ? comparar decimales en DSC
+    call COMPARE_DECIMALES
+    cmp resultado_dec, 1      ; i.dec > j.dec
+    je NO_SWAP
+    cmp resultado_dec, 0      ; i.dec < j.dec
+    je SWAP_INDICES
+    jmp NO_SWAP               ; si iguales ? no swap
+    jmp CONTINUAR
 
 ORDEN_ASC:
-    
-    ; ORDEN DESCENDENTE (DSC = 0)
+    ; ========== ORDEN ASCENDENTE ==========
     cmp dx, bp
-    jl NO_SWAP                
-    jg SWAP_INDICES           
-    jmp COMPARE_DECIMALES_DSC
-
-COMPARE_DECIMALES_DSC:
-    ; DSC: comparar decimales (mayor a menor)
-    mov di, ax
-    shl di, 1
-    mov dx, array_decimales[di]
-    
-    mov di, bx
-    shl di, 1
-    mov bp, array_decimales[di]
-    
-    cmp dx, bp
-    jg NO_SWAP                ; decimal[i] > decimal[j], está bien
-    jl SWAP_INDICES           ; decimal[i] < decimal[j], intercambiar
-    jmp NO_SWAP               ; iguales, no intercambiar
-
-COMPARE_DECIMALES_ASC:
-    ; ASC: comparar decimales (menor a mayor)
-    mov di, ax
-    shl di, 1
-    mov dx, array_decimales[di]
-    
-    mov di, bx
-    shl di, 1
-    mov bp, array_decimales[di]
-    
-    cmp dx, bp
-    jl NO_SWAP                ; decimal[i] < decimal[j], está bien
-    jg SWAP_INDICES           ; decimal[i] > decimal[j], intercambiar
-    jmp NO_SWAP               ; iguales, no intercambiar
+    jg NO_SWAP                ; entero[i] > entero[j] ? OK
+    jl SWAP_INDICES           ; entero[i] < entero[j] ? SWAP
+    ; si iguales ? comparar decimales en ASC
+    call COMPARE_DECIMALES
+    cmp resultado_dec, 1      ; i.dec > j.dec
+    je SWAP_INDICES
+    cmp resultado_dec, 0      ; i.dec < j.dec
+    je NO_SWAP
+    jmp NO_SWAP               ; si iguales ? no swap
 
 SWAP_INDICES:
     mov ax, array_BS[si]
@@ -1302,6 +1284,7 @@ SWAP_INDICES:
     mov array_BS[si+2], ax
 
 NO_SWAP:
+CONTINUAR:
     add si, 2
     loop INTERNO_LOOP
     
@@ -1311,6 +1294,7 @@ NO_SWAP:
 FIN_SORT:
     ret
 BUBBLE_SORT_INDICES ENDP
+
 
 ; ==============================================
 ; Pregunar por orden de Bubble Sort
@@ -1519,5 +1503,75 @@ asce:
     dec al
     CALL MostarPorID
     RET
+
+COMPARE_DECIMALES PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+
+    ; -------------------------
+    ; Obtener índices desde array_BS
+    ; -------------------------
+    mov ax, array_BS[si]      ; índice i
+    mov bx, array_BS[si+2]    ; índice j
+
+    ; -------------------------
+    ; Calcular offset decimal[i]
+    ; -------------------------
+    mov dx, ax        ; dx = i
+    shl dx, 1
+    shl dx, 1         ; dx = i*4
+    mov di, dx        ; di = offset de decimal[i]
+
+    mov cx, array_decimales[di]      ; parte baja
+    mov dx, array_decimales[di+2]    ; parte alta
+
+    ; -------------------------
+    ; Calcular offset decimal[j]
+    ; -------------------------
+    mov bx, bx        ; bx = j
+    shl bx, 1
+    shl bx, 1         ; bx = j*4 ? offset j
+
+    mov si, array_decimales[bx]      ; parte baja
+    mov bp, array_decimales[bx+2]    ; parte alta
+
+    ; -------------------------
+    ; Comparar parte alta
+    ; -------------------------
+    cmp dx, bp
+    ja  DEC_MAYOR
+    jb  DEC_MENOR
+
+    ; Si iguales, comparar parte baja
+    cmp cx, si
+    ja  DEC_MAYOR
+    jb  DEC_MENOR
+
+    ; Iguales
+    mov resultado_dec, 2
+    jmp FIN_COMPARE
+
+DEC_MAYOR:
+    mov resultado_dec, 0
+    jmp FIN_COMPARE
+
+DEC_MENOR:
+    mov resultado_dec, 1
+
+FIN_COMPARE:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+COMPARE_DECIMALES ENDP
+
+
 
 END START
