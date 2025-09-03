@@ -324,9 +324,10 @@ ValidarCalif:
     INT 21h
 
     ; Validar formato numérico y formatear
-    CALL FormatoCalif
+    CALL FormatoCalif                                               ; Flag en caso de error.
     JC  ErrorCalif
 
+    ; Corte para notas iguales o mayores a 100.
     CALL VerifCien
 
     JMP CalificacionValida
@@ -366,7 +367,7 @@ CalificacionValida:
     JMP MenuPrincipal
 ProcesarEntrada ENDP
 
-FormatoCalif PROC
+FormatoCalif PROC                                                   ; Se asegura que la calificacion registrada en el buffer cumpla con el formato.
     PUSH AX
     PUSH BX
     PUSH CX
@@ -383,101 +384,121 @@ FormatoCalif PROC
 ValidarLoop:
     MOV AL, [SI]
     
-    CMP AL, '$'                 ; Fin de cadena
+    ; Validación de caracteres espaciales y pasar a formatear.
+    CMP AL, '$'
     JE  IniciarFormato
-    CMP AL, 13                  ; Fin (Enter)
+    CMP AL, 13
     JE  IniciarFormato
-    CMP AL, '.'                 ; ¿Es punto decimal?
+    CMP AL, '.'
     JE  PuntoValido
     
-    ; --- Validar que sea dígito ---
+    ; Validación de dígitos.
     CMP AL, '0'
     JL  ErrorFormato
     CMP AL, '9'
     JG  ErrorFormato
     
-    ; --- Validar máximo 5 decimales ---
-    CMP DI, 1                   ; ¿Ya estamos en parte decimal?
-    JNE SaltarValidacion        ; Si no, saltar validación de decimales
+    ; Verificación de parte decimal (máximo 5 digitos).
+    CMP DI, 1
+    JNE SaltarValidacion
     
-    INC BX                      ; Incrementar contador de decimales
-    CMP BX, 5                   ; ¿Más de 5 decimales? (5 = demasiados)
-    JG ErrorFormato            ; Si BX >= 5, error
+    ; Contador decimal.
+    INC BX
+    CMP BX, 5
+    JG ErrorFormato
 
+; Vuelve al loop con siguiente caracter. 
 SaltarValidacion:
     INC SI
     JMP ValidarLoop
 
+; Determina inicio de parte decimal y error si multiples puntos.
 PuntoValido:
-    CMP DI, 1                   ; ¿Ya teníamos un punto?
-    JE  ErrorFormato            ; Si sí, error (múltiples puntos)
-    MOV DI, 1                   ; Marcar que encontramos punto
+    CMP DI, 1
+    JE  ErrorFormato
+    MOV DI, 1
+
+    ; Pasar a siguiente caracter.
     INC SI
     JMP ValidarLoop
 
+; Error en el formato ingresada retornar error...
 ErrorFormato:
+    ; Set flag y salir. 
     STC
     JMP FinFormato
 
-IniciarFormato:
-    LEA SI, buffer_calif+2      ; Reiniciar SI al inicio
-    XOR DI, DI                  ; Reiniciar flag de punto
-    XOR BX, BX                  ; Reiniciar contador de decimales
+; Inicio del formateo de la parte decimal.
+IniciarFormato:                                                      ; Se asegura de retonar una calificacion con formato decimal '.00000'
+    LEA SI, buffer_calif+2
+    XOR DI, DI
+    XOR BX, BX
     
 BuscarPunto:
+    ; Iterar sobre cadena. 
+
+    ; Casos para un añadido completo de parte decimal.
     MOV AL, [SI]
-    CMP AL, '$'                 ; Fin de cadena
+    CMP AL, '$'
     JE  AgregarPuntoYDecimales
-    CMP AL, 13                  ; Fin (Enter)
+    CMP AL, 13 
     JE  AgregarPuntoYDecimales
-    CMP AL, '.'                 ; ¿Es punto?
+
+    ; Iteracion en busca de parte fraccionaria.
+    CMP AL, '.'
     JE  EncontrarPunto
     INC SI
     JMP BuscarPunto
 
+; Después de encontrado el punto, contar decimales. 
 EncontrarPunto:
-    MOV DI, 1                   ; Marcar punto encontrado
-    INC SI                      ; Saltar el punto
-    
+    MOV DI, 1
+    INC SI
 ContarDecimales:
     MOV AL, [SI]
-    CMP AL, '$'                 ; Fin de cadena
+    CMP AL, '$'
     JE  Rellenar
-    CMP AL, 13                  ; Fin (Enter)
+    CMP AL, 13
     JE  Rellenar
-    INC BX                      ; Contar dígito decimal
+    INC BX
     INC SI
     JMP ContarDecimales
 
+; Rellenado con ceros. 
 Rellenar:
-    CMP DI, 0                   ; ¿No se encontró punto?
-    JE  AgregarPuntoYDecimales  ; Si no, agregar punto y ceros
+    ; Rellenado completo.
+    CMP DI, 0
+    JE  AgregarPuntoYDecimales
     
+    ; Determinar ceros restantes.
     MOV CX, 5
-    SUB CX, BX                  ; CX = ceros faltantes
-    JLE FinFormatoOk            ; Si ya tiene 5+ decimales, terminar
+    SUB CX, BX                                                          ; CX = ceros faltantes.
+    JLE FinFormatoOk                                                    ; Si tiene 5+ decimales, terminar.
 
+; Loop para rellenar cantidad determina de ceros. 
     MOV AL, '0'
 AgregarCeroLoop:
-    MOV [SI], AL                ; Agregar cero
+    MOV [SI], AL
     INC SI
     LOOP AgregarCeroLoop
-    MOV BYTE PTR [SI], '$'      ; Terminar cadena
+    MOV BYTE PTR [SI], '$'
     JMP FinFormatoOk
 
+; Loop para rellenado completo.
 AgregarPuntoYDecimales:
-    MOV BYTE PTR [SI], '.'      ; Agregar punto
+    MOV BYTE PTR [SI], '.'
     INC SI
-    MOV CX, 5                   ; 5 ceros
+    MOV CX, 5
     MOV AL, '0'
 AgregarTodosCeros:
-    MOV [SI], AL                ; Agregar cero
+    MOV [SI], AL
     INC SI
     LOOP AgregarTodosCeros
-    MOV BYTE PTR [SI], '$'      ; Terminar cadena
+    MOV BYTE PTR [SI], '$'
 
+; Clear flag para caso de exito. 
 FinFormatoOk:
-    CLC                         ; Clear Carry Flag = éxito
+    CLC
 
 FinFormato:
     POP DI
@@ -489,53 +510,51 @@ FinFormato:
     RET
 FormatoCalif ENDP
 
+; Verifica si +100, entonces corta. 
 VerifCien PROC
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH SI
     
-    LEA SI, buffer_calif+2      ; SI apunta al inicio de los datos
-    XOR CX, CX                  ; CX = acumulador parte entera
-    MOV BX, 10                  ; BX = base 10
+    LEA SI, buffer_calif+2
+    XOR CX, CX                                                          ; CX = parte entera.
+    MOV BX, 10
     
+; Calculo de parte entera. 
 CalcularEntero:
-    MOV AL, [SI]                ; Leer carácter
-    CMP AL, '$'                 ; Fin de cadena
+    MOV AL, [SI]
+    CMP AL, '$'
     JE  VerificarCien
-    CMP AL, 13                  ; Fin (Enter)
+    CMP AL, 13
     JE  VerificarCien
-    CMP AL, '.'                 ; Punto decimal ? fin de parte entera
+    CMP AL, '.'
     JE  VerificarCien
     
-    ; Verificar que sea dígito
-    CMP AL, '0'
-    JL  FinVerifCien             ; Si no es dígito, salir
-    CMP AL, '9'
-    JG  FinVerifCien             ; Si no es dígito, salir
-    
-    ; Acumular parte entera
-    SUB AL, '0'                 ; Convertir a número
+    ; Acumular parte entera.
+    SUB AL, '0'                                                         ; Convertir a número.
     MOV AH, 0
     PUSH AX
     MOV AX, CX
-    MUL BX                      ; CX = CX * 10
+    MUL BX                                                              ; CX = CX * 10
     MOV CX, AX
     POP AX
-    ADD CX, AX                  ; CX = CX + dígito
+    ADD CX, AX                                                          ; CX = CX + dígito
     
     INC SI
     JMP CalcularEntero
 
 VerificarCien:
-    ; Verificar si la parte entera es >= 100
+    ; Verificar si la parte entera es >= 100.
     CMP CX, 100
-    JL  FinVerifCien             ; Si es menor que 100, no hacer nada
+
+    ; Terminar si menor...
+    JL  FinVerifCien
     
-    ; --- FORZAR A 100.00000 ---
-    LEA SI, buffer_calif+2      ; Reiniciar al inicio del buffer
+    ; Cortar a '100.00000'.
+    LEA SI, buffer_calif+2                                              ; Reiniciar al inicio del buffer.
     
-    ; Escribir "100.00000"
+    ; Escribir '100.00000'.
     MOV BYTE PTR [SI], '1'
     INC SI
     MOV BYTE PTR [SI], '0'
@@ -556,8 +575,8 @@ VerificarCien:
     INC SI
     MOV BYTE PTR [SI], '$'
     
-    ; Actualizar longitud en el buffer
-    MOV buffer_calif[1], 9      ; 9 caracteres: "100.00000"
+    ; Actualizar longitud en el buffer.
+    MOV buffer_calif[1], 9
 
 FinVerifCien:
     POP SI
