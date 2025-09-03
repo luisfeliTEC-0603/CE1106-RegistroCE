@@ -964,7 +964,7 @@ leer_entero:
     je fin_numero
     
     ; Convertir ASCII a numero
-    sub al, '0'
+    sub al, '0'              ; convierte un dígito almacenado como carácter ASCII en su equivalente numérico.
     mov ah, 0
     push ax                  ; Guardar nuevo digito
     
@@ -987,11 +987,11 @@ encontro_decimal:
     
 leer_decimal:
     mov al, [si]
-    cmp al, '$'              ; ï¿½Fin del string?
+    cmp al, '$'              ; Fin del string?
     je fin_numero
-    cmp al, 13               ; ï¿½Es carriage return?
+    cmp al, 13               ; Es carriage return?
     je fin_numero
-    cmp al, 10               ; ï¿½Es new line?
+    cmp al, 10               ; Es new line?
     je fin_numero
     
     ; Convertir ASCII a nï¿½mero
@@ -1196,11 +1196,9 @@ print_symbol:
 print_num endp
                  
                  
-; ==============================================
-; PROCEDIMIENTO: BUBBLE_SORT_INDICES
-; Ordena los índices en array_BS basado en los valores
-; de array_enteros y array_decimales
-; ==============================================
+;---------------------------------
+; BUBBLE_SORT_INDICES
+;---------------------------------
 BUBBLE_SORT_INDICES PROC
     ; Cargar contador y verificar
     mov al, contador
@@ -1213,7 +1211,10 @@ BUBBLE_SORT_INDICES PROC
     
     ; Inicializar array_BS con índices secuenciales
     mov si, 0
-    mov ax, 0
+    mov ax, 0  
+    
+    ; Al final array_BS queda con los índices 0, 1, 2, 3, 4, .... , contador - 1 
+    ; en palabras de 16 bits, listos para usarse en ordenamientos o recorridos.
 INICIALIZAR_INDICES:
     mov array_BS[si], ax
     add si, 2
@@ -1236,12 +1237,12 @@ EXTERNO_LOOP:
     dec cx
     
 INTERNO_LOOP:
-    mov ax, array_BS[si]
-    mov bx, array_BS[si+2]
+    mov ax, array_BS[si]  ; Primer par de bytes
+    mov bx, array_BS[si+2]; Segundo par de bytes
     
     ; Comparar partes enteras
     mov di, ax
-    shl di, 1
+    shl di, 1             ; significa: "Shift Left" (desplazar a la izquierda) el registro DI una vez.
     mov dx, array_enteros[di]
     
     mov di, bx
@@ -1296,9 +1297,9 @@ FIN_SORT:
 BUBBLE_SORT_INDICES ENDP
 
 
-; ==============================================
+;---------------------------------
 ; Pregunar por orden de Bubble Sort
-; ==============================================
+;---------------------------------
 
 PREGUNTAR_ORDEN PROC
 PREGUNTAR:
@@ -1341,9 +1342,9 @@ PREGUNTAR_ORDEN ENDP
 
                 
                 
-; ================================
+;---------------------------------
 ; ordenarListas 
-; ================================
+;---------------------------------
 ordenarListas PROC
     push ax
     push bx
@@ -1360,16 +1361,16 @@ ordenarListas PROC
     mov cl, contador
     mov ch, 0
     mov ax, tam_nombre + 1
-    mul cx
+    mul cx                                 ; AX contiene (tamaño + 1) * contador
     mov cx, ax
-    mov si, offset lista_nombres
-    mov di, offset buffer_nombres_ordenados
-    rep movsb
+    mov si, offset lista_nombres           ; Source index inicia en la lista de nombres
+    mov di, offset buffer_nombres_ordenados; Destination index inicia en buffer de nombres ordenados
+    rep movsb  ; Cambio de bloques de memoria.
     
     mov cl, contador
     mov ch, 0
     mov ax, tam_calif + 1
-    mul cx
+    mul cx                                 ; AX contiene (tamaño + 1) * contador
     mov cx, ax
     mov si, offset lista_califs
     mov di, offset buffer_califs_ordenados
@@ -1450,7 +1451,9 @@ reordenar:
     pop ax
     ret
 ordenarListas ENDP
-
+;------------------------------------
+; Generar Maximo y Minimo --> Usa BS
+;------------------------------------
 generar_Max_Min PROC   
     mov al, orden
     cmp al, 1
@@ -1503,7 +1506,10 @@ asce:
     dec al
     CALL MostarPorID
     RET
-
+;----------------------------------------
+; Compara decimales                                          
+;----------------------------------------  
+; AX debe contener índice del elemento tal que el siguiente es con quien se debe compara
 COMPARE_DECIMALES PROC
     push ax
     push bx
