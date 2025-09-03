@@ -6,22 +6,20 @@ tam_nombre          EQU 30                                      ; TamaÃ±o mÃ¡xim
 tam_calif           EQU 10                                      ; TamaÃ±o mÃ¡ximo para la calificaciÃ³n. 
 max_estudiantes     EQU 15                                       ; NÃºmero mÃ¡ximo de estudiantes en el registro.
 contador            DB 0                                        ; Registro de estudiantes ingresados. 
-                         
-; --------------------------------------
-; Acumuladores para el cálculo del ponderado
-; --------------------------------------
-suma_total      DW 0
-promedio_ponderado DW 0
-
- 
-
-                         
 
 
-                         
+; Variables
+suma_entera DW 0
+suma_decimal_low DW 0
+suma_decimal_high DW 0
+promedio_entero DW 0
+promedio_decimal DW 0
+contador_word DW 0 
+
+
 ; ---< Buffers >---
 ; [Tam mÃ¡ximo][Caracts leÃ­dos][Buffer]
-; [0]: Tamaño mÃ¡ximo de la entrada.
+; [0]: TamaÃ±o mÃ¡ximo de la entrada.
 ; [1]: NÃºmero real de caracteres leÃ­dos.
 ; [2]: Buffer de almaenamiento. 
 
@@ -53,7 +51,21 @@ flag_decimal    DB 0                                            ; Flag al encont
 temp_index DB 0  
 ; Contadores de aprobaciones
 contador_aprobados      DB 0
-contador_desaprobados   DB 0            
+contador_desaprobados   DB 0  
+ 
+; Bubble Sort 
+; Array que contiene indices resultantes de un Bubble Sort
+array_BS   DW max_estudiantes dup(0)
+orden            DB 1 ; ASC = 1, DSC = 0   
+resultado_dec DB ?   ; 1 = primero mayor, 0 = segundo mayor, 2 = iguales
+
+; Buffers para datos ordenados
+buffer_nombres_ordenados DB max_estudiantes * (tam_nombre + 1) DUP('$')
+buffer_califs_ordenados  DB max_estudiantes * (tam_calif + 1) DUP('$')
+
+; Variables temporales
+temp_reg    DW 0      ; Para cálculos temporales
+source_ptr  DW 0      ; Para guardar puntero origen
 
 ; ---< Mensajes y Prompts del Sistema >---
 msgMenu     DB 13, 10, '-------------< CE1106 - SISTEMA DE REGISTRO >------------', 13, 10
@@ -69,29 +81,21 @@ msgMenu     DB 13, 10, '-------------< CE1106 - SISTEMA DE REGISTRO >-----------
             DB         'Ingrese opcion: $'
 
 ; Mensajes [1]
-msgT1           DB 13, 10, '[ AGREGAR ESTUDIANTE ]', 13, 10, '$'
-msgPedirNombre  DB 13, 10, 'Ingrese nombre completo del estudiante: $'
-msgPedirNota    DB 13, 10, 'Ingrese la calificacion del estudiante: $'
+msgT1               DB 13, 10, '[ AGREGAR ESTUDIANTE ]', 13, 10, '$'
+msgPedirNombre      DB 13, 10, 'Ingrese nombre completo del estudiante: $'
+msgPedirNota        DB 13, 10, 'Ingrese la calificacion del estudiante: $'
+msgCalifInvalida    DB 13, 10, 'Error! La calificacion no cuenta con el formato adecuado... Intente nuevamente...', 13, 10,'$'
 
 ; Mensajes [2]
 msgT2               DB 13, 10, '[ ESTADISTICAS ]', 13, 10, '$'
 msgDebug            DB 13, 10, 'Procesado: $' 
 msgNoStats          DB 13, 10, 'No hay estudiantes registrados en el sistema...', 13, 10, '$'
-msgPonderado    DB 13, 10, 'Promedio ponderado: $' ;(mostrar el mensaje de ponderado)
-
-
-
-
-
-
-      
-      
-      
-      
-
 msgPorcAprobados    DB 13, 10, 'Porcentaje de aprobados: $'
 msgPorcReprobados   DB 13, 10, 'Porcentaje de reprobados: $'
-
+msgMaxNota          DB 13, 10, 'El estudiante con mayor nota es: $'
+msgMinNota          DB 13, 10, 'El estudiante con menor nota es: $'
+msgMaxMin           DB 13, 10, 'Se presentaran datos de notas mayores y menores en orden de ID, Nombre y Nota.$'
+msgPonderado        DB 13, 10, 'Promedio ponderado: $' ;(mostrar el mensaje de ponderado)
 ; Mensajes [3]
 msgT3               DB 13, 10, '[ BUSQUEDA POR ID ]', 13, 10, '$'
 msgPedirID          DB 13, 10, 'Ingrese el ID del estudiante: $'
@@ -100,6 +104,8 @@ msgEstEncontrado    DB 13, 10, 'Estudiante encontrado:', 13, 10, '$'
 
 ; Mensajes [4]
 msgT4               DB 13, 10, '[ ORDENAMIENTO DE CALIFICACIONES ]', 13, 10, '$'
+msg_pregunta    DB 13,10,'Ingrese 1 para ASC o 0 para DSC: $'
+msg_error       DB 13,10,'Error: Ingrese solo 1 o 0',13,10,'$'
 
 ; Mensajes [5]
 msgT5               DB  13, 10, '[ REGISTROS ]', 13, 10, '$'
@@ -179,8 +185,30 @@ Opcion1:
     RET
 
 Opcion2:
+    CALL LimpiarPantalla
     CALL separar_numeros_func
+    
+    ; preparar registros para la rutina
+    LEA BX, array_enteros     ; BX = base de enteros
+    LEA SI, array_decimales   ; SI = base de decimales
+    MOV CX, max_estudiantes   ; cantidad de elementos  
+    
+    ; array_BS almacena orden.
+    CALL BUBBLE_SORT_INDICES
+    
+    CALL ordenarListas     
+
     CALL MostrarEstadisticas
+                            
+    MOV AH, 09h
+    LEA DX, msgMaxMin
+    INT 21h
+                            
+    CALL generar_Max_Min 
+    
+    
+    JMP FinEstadisticas
+    
     RET
 
 Opcion3:
@@ -188,8 +216,23 @@ Opcion3:
     RET
 
 Opcion4:
+    CALL LimpiarPantalla
     CALL separar_numeros_func
-    CALL OrdenarCalif
+    
+    call PREGUNTAR_ORDEN 
+    
+    ; preparar registros para la rutina
+    LEA BX, array_enteros     ; BX = base de enteros
+    LEA SI, array_decimales   ; SI = base de decimales
+    MOV CX, max_estudiantes   ; cantidad de elementos  
+    
+    ; array_BS almacena orden.
+    CALL BUBBLE_SORT_INDICES
+    
+    CALL ordenarListas 
+    CALL MostrarListaCompleta
+        
+     
     RET
 
 Opcion5:
@@ -212,7 +255,7 @@ IntentarAgregar PROC
 
     CALL LimpiarPantalla
 
-    ; TÃ­tulo de la SecciÃ³n.
+    ; Título de la Sección.
     MOV AH, 09h
     LEA DX, msgT1
     INT 21h
@@ -220,7 +263,7 @@ IntentarAgregar PROC
     ; Verifica si hay espacio suficiente.
     MOV AL, contador
     CMP AL, max_estudiantes
-    JL  ProcesarEntrada                                            ; SÃ­ puede agregar estudiante (contador < max_estudiantes).
+    JL  ProcesarEntrada                                            ; Sí puede agregar estudiante (contador < max_estudiantes).
     
     ; Espacio insuficiente. 
     MOV AH, 09h
@@ -231,7 +274,7 @@ IntentarAgregar PROC
     MOV AH, 01h
     INT 21h
 
-    ; Retorna a MenÃº Principal.
+    ; Retorna a Menú Principal.
     JMP FinAgregar
     
 PuedeAgregar:
@@ -258,20 +301,20 @@ PedirNombre:
     INT 21h
     
     ; Leer entrada del nombre. 
-    MOV buffer_nombre, tam_nombre                                   ; Establecer tamaÃ±o del buffer en [0].
+    MOV buffer_nombre, tam_nombre                                   ; Establecer tamaño del buffer en [0].
     LEA DX, buffer_nombre                                           ; DX apunta al buffer de entrada. 
     MOV AH, 0Ah
     INT 21h
     
-    ; TerminaciÃ³n '$' para compatibilidad con DOS.
+    ; Terminación '$' para compatibilidad con DOS.
     XOR BX, BX                                                      ; Limpiar BX.
-    MOV BL, buffer_nombre[1]                                        ; BL = nÃºmero de caracteres leÃ­dos.
+    MOV BL, buffer_nombre[1]                                        ; BL = número de caracteres leídos.
     MOV buffer_nombre[BX+2], '$'                                    ; Agregar '$'. 
     
-    ; Calcular posiciÃ³n de destino. 
+    ; Calcular posición de destino. 
     XOR AX, AX
     MOV AL, contador
-    MOV BL, tam_nombre+1                                            ; BL = tamaÃ±o de cada entrada (incluye terminador).
+    MOV BL, tam_nombre+1                                            ; BL = tamaño de cada entrada (incluye terminador).
     MUL BL                                                          ; AX (deslpazamiento) = contador * (tam_nombre+1)
     LEA DI, lista_nombres
     ADD DI, AX                                                      ; DI (destino en lista) = deslpazamiento + inicio 
@@ -279,21 +322,35 @@ PedirNombre:
     CALL CopiarCadena                                               ; Copiar cadena en lista. 
 
 PedirCalif:
-    ; Pedir calificaciÃ³n del estudiante.
+    ; Pedir calificación del estudiante.
     MOV AH, 09h
     LEA DX, msgPedirNota
     INT 21h
 
-    ; Leer entrada de calificaciÃ³n. 
+ValidarCalif:
+    ; Leer entrada de calificación. 
     MOV buffer_calif, tam_calif
     LEA DX, buffer_calif
     MOV AH, 0Ah
     INT 21h
 
-    ; Rellenado del nÃºmero con 5 decimales. 
-    CALL RellenadoFracc
+    ; Validar formato numérico y formatear
+    CALL FormatoCalif
+    JC  ErrorCalif
+
+    CALL VerifCien
+
+    JMP CalificacionValida
     
-    ; Copiar calificaciÃ³n en lista.
+ErrorCalif:
+    ; Mostrar mensaje de error y volver a pedir.
+    MOV AH, 09h
+    LEA DX, msgCalifInvalida
+    INT 21h
+    JMP PedirCalif  
+
+CalificacionValida:
+    ; Copiar calificación en lista.
     XOR AX, AX
     MOV AL, contador
     MOV BL, tam_calif+1
@@ -306,7 +363,7 @@ PedirCalif:
     ; Incrementar contador.
     INC contador
     
-    ; Salto de lÃ­nea. 
+    ; Salto de línea. 
     MOV AH, 09h
     LEA DX, nueva_linea
     INT 21h
@@ -320,7 +377,7 @@ PedirCalif:
     JMP MenuPrincipal
 ProcesarEntrada ENDP
 
-RellenadoFracc PROC                                                 ; Modifica el buffer de calificaciones para que cumpla con el formato fraccionario.
+FormatoCalif PROC                                                   ; Formatea la calificación para un formato adecuado.
     PUSH AX
     PUSH BX
     PUSH CX
@@ -328,73 +385,112 @@ RellenadoFracc PROC                                                 ; Modifica e
     PUSH SI
     PUSH DI
     
-    LEA SI, buffer_calif+2                                          ; SI = inicio de la cadena de entrada.
-    XOR DI, DI                                                       ; DI = flag punto decimal encontrado.
-    XOR BX, BX                                                       ; BX = contador de parte fraccionaria.
+    LEA SI, buffer_calif+2
+    XOR DI, DI
+    XOR BX, BX
+    XOR CX, CX
+    MOV DX, 10
     
-BuscarPunto:                                                        ; Loop para determinar la parte fraccionaria. 
-    ; Lectura de caracteres hasta el punto.
+ValidarLoop:                                                        ; Validación de caracteres numéricos.
     MOV AL, [SI]
     
-    CMP AL, '$'
-    JE  AgregarPuntoYDecimales                                      ; Fin de la cadena por terminador '$'.
-    CMP AL, 13
-    JE  AgregarPuntoYDecimales                                      ; Fin de la cadena por ENTER.
-    CMP AL, '.'
-    JE  EncontrarPunto                                               ; Se encontro el punto.
+    CMP AL, '$'                 ; Fin de cadena
+    JE  IniciarFormato          ; Saltar directamente al formateo
+    CMP AL, 13                  ; Fin (Enter)
+    JE  IniciarFormato          ; Saltar directamente al formateo
+    CMP AL, '.'                 ; ¿Es punto decimal?
+    JE  PuntoValido
+    
+    ; --- Validar que sea dígito ---
+    CMP AL, '0'
+    JL  ErrorFormato
+    CMP AL, '9'
+    JG  ErrorFormato
+    
+    ; --- Validar máximo 5 decimales ---
+    CMP DI, 1                   ; ¿Ya estamos en parte decimal?
+    JNE SaltarValidacion        ; Si no, saltar validación de decimales
+    
+    INC BX                      ; Incrementar contador de decimales
+    CMP BX, 6                   ; ¿Más de 5 decimales?
+    JG ErrorFormato
 
-    ; Siguiente caracter.
+SaltarValidacion:
+    INC SI
+    JMP ValidarLoop
+
+PuntoValido:
+    INC DI                      ; Marcar que encontramos punto
+    CMP DI, 1                   ; ¿Es el primer punto?
+    JNE ErrorFormato            ; Si no, error (múltiples puntos)
+    INC SI
+    JMP ValidarLoop
+
+ErrorFormato:
+    STC
+    JMP FinFormato
+
+IniciarFormato:
+    LEA SI, buffer_calif+2      ; Reiniciar SI al inicio
+    XOR DI, DI                  ; Reiniciar flag de punto
+    XOR BX, BX                  ; Reiniciar contador de decimales
+    
+BuscarPunto:
+    MOV AL, [SI]
+    CMP AL, '$'                 ; Fin de cadena
+    JE  AgregarPuntoYDecimales
+    CMP AL, 13                  ; Fin (Enter)
+    JE  AgregarPuntoYDecimales
+    CMP AL, '.'                 ; ¿Es punto?
+    JE  EncontrarPunto
     INC SI
     JMP BuscarPunto
 
 EncontrarPunto:
-    MOV DI, 1                                                        ; Raise Flag...
-    INC SI                                                           ; Avanzar al primer decimal.
+    MOV DI, 1                   ; Marcar punto encontrado
+    INC SI                      ; Saltar el punto
     
 ContarDecimales:
-    ; Loop para determinar cantidad de decimales a rellenar. 
     MOV AL, [SI]
-    CMP AL, '$'
+    CMP AL, '$'                 ; Fin de cadena
     JE  Rellenar
-    CMP AL, 13
+    CMP AL, 13                  ; Fin (Enter)
     JE  Rellenar
-    INC BX                                                           ; Incrementar contador de decimales leÃ­dos. 
+    INC BX                      ; Contar dígito decimal
     INC SI
     JMP ContarDecimales
 
 Rellenar:
-    ; Revisar si hay parte fraccionaria. 
-    CMP DI, 0
-    JE  AgregarPuntoYDecimales
+    CMP DI, 0                   ; ¿No se encontró punto?
+    JE  AgregarPuntoYDecimales  ; Si no, agregar punto y ceros
     
-    ; Calcular ceros.                                                ; ActualizaciÃ³n de CX como futuro registro de ctrl.
     MOV CX, 5
-    SUB CX, BX
-    JLE FinRelleno                                                  ; Finalizar si 5 o mÃ¡s decimales.
+    SUB CX, BX                  ; CX = ceros faltantes
+    JLE FinFormatoOk            ; Si ya tiene 5+ decimales, terminar
 
-    ; Loop para agregar los ceros. 
     MOV AL, '0'
 AgregarCeroLoop:
-    MOV [SI], AL
+    MOV [SI], AL                ; Agregar cero
     INC SI
     LOOP AgregarCeroLoop
+    MOV BYTE PTR [SI], '$'      ; Terminar cadena
+    JMP FinFormatoOk
 
-    MOV BYTE PTR [SI], '$'                                            ; Terminar la cadena
-    JMP FinRelleno
-
-AgregarPuntoYDecimales:                                               ; EspecÃ­fico para nÃºmeros que solo tienen parte entera. 
-    MOV BYTE PTR [SI], '.'                                            ; Agregar punto
+AgregarPuntoYDecimales:
+    MOV BYTE PTR [SI], '.'      ; Agregar punto
     INC SI
-
-    MOV CX, 5                                                         ; Indice para 5 iteraciones. 
+    MOV CX, 5                   ; 5 ceros
     MOV AL, '0'
 AgregarTodosCeros:
-    MOV [SI], AL
+    MOV [SI], AL                ; Agregar cero
     INC SI
     LOOP AgregarTodosCeros
-    MOV BYTE PTR [SI], '$'
+    MOV BYTE PTR [SI], '$'      ; Terminar cadena
 
-FinRelleno:
+FinFormatoOk:
+    CLC                         ; Clear Carry Flag = éxito
+
+FinFormato:
     POP DI
     POP SI
     POP DX
@@ -402,7 +498,85 @@ FinRelleno:
     POP BX
     POP AX
     RET
-RellenadoFracc ENDP
+FormatoCalif ENDP
+
+VerifCien PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH SI
+    
+    LEA SI, buffer_calif+2      ; SI apunta al inicio de los datos
+    XOR CX, CX                  ; CX = acumulador parte entera
+    MOV BX, 10                  ; BX = base 10
+    
+CalcularEntero:
+    MOV AL, [SI]                ; Leer carácter
+    CMP AL, '$'                 ; Fin de cadena
+    JE  VerificarCien
+    CMP AL, 13                  ; Fin (Enter)
+    JE  VerificarCien
+    CMP AL, '.'                 ; Punto decimal ? fin de parte entera
+    JE  VerificarCien
+    
+    ; Verificar que sea dígito
+    CMP AL, '0'
+    JL  FinVerifCien             ; Si no es dígito, salir
+    CMP AL, '9'
+    JG  FinVerifCien             ; Si no es dígito, salir
+    
+    ; Acumular parte entera
+    SUB AL, '0'                 ; Convertir a número
+    MOV AH, 0
+    PUSH AX
+    MOV AX, CX
+    MUL BX                      ; CX = CX * 10
+    MOV CX, AX
+    POP AX
+    ADD CX, AX                  ; CX = CX + dígito
+    
+    INC SI
+    JMP CalcularEntero
+
+VerificarCien:
+    ; Verificar si la parte entera es >= 100
+    CMP CX, 100
+    JL  FinVerifCien             ; Si es menor que 100, no hacer nada
+    
+    ; --- FORZAR A 100.00000 ---
+    LEA SI, buffer_calif+2      ; Reiniciar al inicio del buffer
+    
+    ; Escribir "100.00000"
+    MOV BYTE PTR [SI], '1'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '.'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '0'
+    INC SI
+    MOV BYTE PTR [SI], '$'
+    
+    ; Actualizar longitud en el buffer
+    MOV buffer_calif[1], 9      ; 9 caracteres: "100.00000"
+
+FinVerifCien:
+    POP SI
+    POP CX
+    POP BX
+    POP AX
+    RET
+VerifCien ENDP     
 
 ; ---< Buscar Estudiante por ID >--- 
 BusquedaPorID PROC
@@ -512,14 +686,14 @@ IDInvalidoBusqueda:
     RET
 BusquedaPorID ENDP
 
-MostarPorID PROC                                                    ; AL = Ã­ndice del estudiante (base 0).
+MostarPorID PROC                                                    ; AL = índice del estudiante (base 0).
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
     PUSH SI
     
-    ; Comparar Ã­ndice con nÃºmero de estudiantes. 
+    ; Comparar índice con número de estudiantes. 
     CMP AL, contador
     JGE IDInvalidoBusqueda
     
@@ -529,19 +703,34 @@ MostarPorID PROC                                                    ; AL = Ã­ndi
     
     ; Mostar ID del estudiante. 
     MOV AH, 02h
-    MOV DL, tabulador
+    MOV DL, 09h
     INT 21h
+
+    ; Verificar si es mayor a 9
     MOV DL, BL
-    ADD DL, '1'                                                     ; ConversiÃ³n a base 1 del ID.
+    INC DL
+    CMP DL, 10                                                       ; Verificar cantidad de dígitos al comparar con 10. 
+    JB  UnDigito
+
+    ; Con dos dígitos mostrar "1" y luego unidad.
+    PUSH DX
+    MOV DL, '1'
     INT 21h
+    POP DX
+    SUB DL, 10                                                      ; DL(unidad) = DL(ínidice) - 10
+
+UnDigito:
+    ADD DL, '0'                                                     ; Convertir a ASCII. 
+    INT 21h
+
     MOV DL, '.'
     INT 21h
-    MOV DL, tabulador
+    MOV DL, 09h
     INT 21h
     
     ; Mostrar Nombre.
     MOV AL, BL
-    MOV CL, tam_nombre + 1                                          ; CL = tamaÃ±o (+'$').
+    MOV CL, tam_nombre + 1                                          ; CL = tamaño (+'$').
     MUL CL                                                          ; AX (offset) = AL * CL.
     LEA SI, lista_nombres
     ADD SI, AX                                                      ; offset + inicio = destino. 
@@ -551,7 +740,7 @@ MostarPorID PROC                                                    ; AL = Ã­ndi
     MOV DL, 09h
     INT 21h
     
-    ; Mostrar calificaciÃ³n. 
+    ; Mostrar calificación. 
     MOV AL, BL
     MOV CL, tam_calif + 1
     MUL CL
@@ -646,12 +835,13 @@ MostrarEstadisticas PROC
     MOV AH, 09h
     LEA DX, msgNoStats
     INT 21h
-    JMP FinEstadisticas
 
 MostrarStats:
-    CALL calcular_porcentajes 
-    CALL calcular_ponderado 
-             
+    CALL calcular_porcentajes
+    CALL calcular_ponderado
+    RET
+
+MostrarEstadisticas ENDP 
 
 FinEstadisticas:
     MOV AH, 09h
@@ -659,51 +849,130 @@ FinEstadisticas:
     INT 21h
     MOV AH, 01h
     INT 21h 
-    RET
-MostrarEstadisticas ENDP 
+    RET   
+        
+        
+        
+        
+        
 
-     
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ; --------------------------------------
-; CALCULAR PROMEDIO PONDERADO (VERSIÓN OPTIMIZADA)
+; CALCULAR PROMEDIO PONDERADO (VERSIÓN CORRECTA)
 ; --------------------------------------
 calcular_ponderado PROC
     MOV CL, contador
     CMP CL, 0
     JE fin_calculo_ponderado
     
-    XOR SI, SI              ; Reiniciar índice
-    XOR AX, AX              ; Reiniciar acumulador
-    MOV suma_total, 0
+    ; Inicializar variables
+    MOV suma_entera, 0
+    MOV suma_decimal_low, 0
+    MOV suma_decimal_high, 0
+    
+    ; Convertir contador a word
+    XOR AX, AX
+    MOV AL, contador
+    MOV contador_word, AX
+    
+    ; 1. SUMAR TODAS LAS CALIFICACIONES
+    XOR SI, SI
+    XOR DI, DI
+    MOV CX, contador_word
     
 ciclo_suma:
-    MOV BX, array_enteros[SI] ; Obtener calificación entera
-    ADD AX, BX              ; Sumar al acumulador
-    ADD SI, 2               ; Siguiente elemento
+    ; Sumar parte entera
+    MOV AX, array_enteros[SI]
+    ADD suma_entera, AX
+    
+    ; Sumar parte decimal (32 BITS - 2 WORDS)
+    MOV AX, array_decimales[DI]      ; Parte baja
+    ADD suma_decimal_low, AX
+    MOV AX, array_decimales[DI + 2]  ; Parte alta
+    ADC suma_decimal_high, AX
+    
+    ADD SI, 2
+    ADD DI, 4  ; ¡IMPORTANTE! 4 bytes por elemento decimal (32 bits)
     LOOP ciclo_suma
     
-    MOV suma_total, AX      ; Guardar suma total
-    
-    ; Calcular promedio (suma_total / número_estudiantes)
+    ; 2. CALCULAR PROMEDIO DE PARTE ENTERA
+    MOV AX, suma_entera
     XOR DX, DX
-    MOV BX, 0
-    MOV BL, contador
-    DIV BX                  ; AX = suma_total / contador
-    MOV promedio_ponderado, AX
+    MOV BX, contador_word
+    DIV BX
+    MOV promedio_entero, AX
     
-    ; Mostrar resultado
+    ; 3. CALCULAR PROMEDIO DE PARTE DECIMAL (32 bits / 16 bits)
+    MOV AX, suma_decimal_low
+    MOV DX, suma_decimal_high
+    MOV BX, contador_word
+    CALL div_32_16
+    MOV promedio_decimal, AX
+    
+    ; 4. MOSTRAR RESULTADO
     MOV AH, 09h
     LEA DX, msgPonderado
     INT 21h
     
-    MOV AX, promedio_ponderado
-    CALL print_num_sin_porcentaje    ; ? NUEVO procedimiento
+    MOV AX, promedio_entero
+    CALL print_num_sin_porcentaje
+    
+    MOV AH, 02h
+    MOV DL, '.'
+    INT 21h
+    
+    MOV AX, promedio_decimal
+    CALL print_decimal_5_digits
     
 fin_calculo_ponderado:
     RET
 calcular_ponderado ENDP
 
 ; --------------------------------------
+; DIV_32_16: División de 32 bits entre 16 bits
+; Entrada: DX:AX = dividendo, BX = divisor
+; Salida: AX = cociente
+; --------------------------------------
+div_32_16 PROC
+    PUSH CX
+    PUSH SI
+    
+    MOV SI, DX      ; Guardar parte alta
+    MOV CX, AX      ; Guardar parte baja
+    
+    ; División de la parte alta
+    MOV AX, SI
+    XOR DX, DX
+    DIV BX
+    MOV SI, AX      ; SI = cociente alto
+    
+    ; División de la parte baja
+    MOV AX, CX
+    DIV BX          ; AX = cociente bajo
+    
+    ; Para el promedio decimal, solo necesitamos los 16 bits bajos
+    ; (los decimales no deberían exceder 65535 después de dividir)
+    
+    POP SI
+    POP CX
+    RET
+div_32_16 ENDP
+
+; --------------------------------------
+; PRINT_NUM_SIN_PORCENTAJE: Imprime número sin el símbolo %
 ; Entrada: AX = número a imprimir
 ; --------------------------------------
 print_num_sin_porcentaje PROC
@@ -725,7 +994,7 @@ print_num_sin_porcentaje PROC
 
 conv_loop_sin:
     XOR DX, DX
-    DIV BX            ; AX / 10 ? cociente en AX, residuo en DX
+    DIV BX            ; AX / 10
     PUSH DX           ; guardar residuo (dígito)
     INC CX
     CMP AX, 0
@@ -745,6 +1014,95 @@ fin_print_sin:
     POP AX
     RET
 print_num_sin_porcentaje ENDP
+
+; --------------------------------------
+; PRINT_DECIMAL_5_DIGITS: Imprime 5 dígitos decimales
+; Entrada: AX = número a imprimir (0-99999)
+; --------------------------------------
+print_decimal_5_digits PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+    
+    MOV BX, 10
+    MOV CX, 0
+    MOV SI, AX      ; Guardar valor original
+    
+    ; Caso especial: si es 0, imprimir "00000"
+    CMP AX, 0
+    JNE convert_loop
+    MOV CX, 5
+    MOV DL, '0'
+print_zeros:
+    MOV AH, 02h
+    INT 21h
+    LOOP print_zeros
+    JMP end_print
+    
+convert_loop:
+    XOR DX, DX
+    DIV BX
+    PUSH DX
+    INC CX
+    CMP AX, 0
+    JNE convert_loop
+    
+    ; Padding con ceros a la izquierda si es necesario
+    MOV AX, 5
+    SUB AX, CX
+    JZ print_digit1  ; Si ya son 5 dígitos
+    
+    MOV BX, AX      ; BX = número de ceros a añadir
+    MOV CX, BX
+pad_zeros:
+    MOV DL, '0'
+    MOV AH, 02h
+    INT 21h
+    LOOP pad_zeros
+    
+    MOV CX, 5
+    SUB CX, BX
+    
+print_digit1:
+    POP DX
+    ADD DL, '0'
+    MOV AH, 02h
+    INT 21h
+    LOOP print_digit1
+    
+end_print:
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+print_decimal_5_digits ENDP
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
 
 
 
@@ -1084,12 +1442,12 @@ conv_loop:
     cmp ax, 0
     jne conv_loop
 
-print_digit:
+print_digits:
     pop dx
     add dl, '0'
     mov ah, 2
     int 21h
-    loop print_digit
+    loop print_digits
 
 print_symbol:
     ; imprimir simbolo de porcentaje
@@ -1104,5 +1462,384 @@ print_symbol:
     ret
 
 print_num endp
+                 
+                 
+; ==============================================
+; PROCEDIMIENTO: BUBBLE_SORT_INDICES
+; Ordena los índices en array_BS basado en los valores
+; de array_enteros y array_decimales
+; ==============================================
+BUBBLE_SORT_INDICES PROC
+    ; Cargar contador y verificar
+    mov al, contador
+    mov ah, 0
+    mov cx, ax
+    cmp cx, 0
+    je FIN_SORT
+    cmp cx, 1
+    je FIN_SORT
+    
+    ; Inicializar array_BS con índices secuenciales
+    mov si, 0
+    mov ax, 0
+INICIALIZAR_INDICES:
+    mov array_BS[si], ax
+    add si, 2
+    inc ax
+    loop INICIALIZAR_INDICES
+
+    ; Bubble sort
+    mov al, contador
+    mov ah, 0
+    mov cx, ax
+    dec cx
+    
+EXTERNO_LOOP:
+    push cx
+    mov si, 0
+    
+    mov al, contador
+    mov ah, 0
+    mov cx, ax
+    dec cx
+    
+INTERNO_LOOP:
+    mov ax, array_BS[si]
+    mov bx, array_BS[si+2]
+    
+    ; Comparar partes enteras
+    mov di, ax
+    shl di, 1
+    mov dx, array_enteros[di]
+    
+    mov di, bx
+    shl di, 1
+    mov bp, array_enteros[di]
+    
+    cmp orden, 0
+    je ORDEN_ASC
+    
+    ; ========== ORDEN DESCENDENTE ==========
+    cmp dx, bp
+    jl NO_SWAP                ; entero[i] < entero[j] ? OK
+    jg SWAP_INDICES           ; entero[i] > entero[j] ? SWAP
+    ; si iguales ? comparar decimales en DSC
+    call COMPARE_DECIMALES
+    cmp resultado_dec, 1      ; i.dec > j.dec
+    je NO_SWAP
+    cmp resultado_dec, 0      ; i.dec < j.dec
+    je SWAP_INDICES
+    jmp NO_SWAP               ; si iguales ? no swap
+    jmp CONTINUAR
+
+ORDEN_ASC:
+    ; ========== ORDEN ASCENDENTE ==========
+    cmp dx, bp
+    jg NO_SWAP                ; entero[i] > entero[j] ? OK
+    jl SWAP_INDICES           ; entero[i] < entero[j] ? SWAP
+    ; si iguales ? comparar decimales en ASC
+    call COMPARE_DECIMALES
+    cmp resultado_dec, 1      ; i.dec > j.dec
+    je SWAP_INDICES
+    cmp resultado_dec, 0      ; i.dec < j.dec
+    je NO_SWAP
+    jmp NO_SWAP               ; si iguales ? no swap
+
+SWAP_INDICES:
+    mov ax, array_BS[si]
+    mov bx, array_BS[si+2]
+    mov array_BS[si], bx
+    mov array_BS[si+2], ax
+
+NO_SWAP:
+CONTINUAR:
+    add si, 2
+    loop INTERNO_LOOP
+    
+    pop cx
+    loop EXTERNO_LOOP
+    
+FIN_SORT:
+    ret
+BUBBLE_SORT_INDICES ENDP
+
+
+; ==============================================
+; Pregunar por orden de Bubble Sort
+; ==============================================
+
+PREGUNTAR_ORDEN PROC
+PREGUNTAR:
+    ; Mostrar mensaje de pregunta
+    mov ah, 09h
+    lea dx, msg_pregunta
+    int 21h
+    
+    ; Leer un solo carácter
+    mov ah, 01h
+    int 21h
+    
+    ; Verificar entrada
+    cmp al, '1'
+    je ES_ASC
+    cmp al, '0'
+    je ES_DSC
+    jmp ERROR_INPUT
+
+ES_ASC:
+    mov orden, 1               ; ASC = 1
+    jmp FIN_PREGUNTA
+
+ES_DSC:
+    mov orden, 0               ; DSC = 0
+    jmp FIN_PREGUNTA
+
+ERROR_INPUT:
+    ; Mostrar mensaje de error
+    mov ah, 09h
+    lea dx, msg_error
+    int 21h
+    jmp PREGUNTAR
+
+FIN_PREGUNTA:
+    ret
+PREGUNTAR_ORDEN ENDP   
+
+
+
+                
+                
+; ================================
+; ordenarListas 
+; ================================
+ordenarListas PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push es
+    
+    push ds
+    pop es                   ; ES = DS
+    
+    ; PRIMERO: COPIAR TODO A BUFFERS (respaldo)
+    mov cl, contador
+    mov ch, 0
+    mov ax, tam_nombre + 1
+    mul cx
+    mov cx, ax
+    mov si, offset lista_nombres
+    mov di, offset buffer_nombres_ordenados
+    rep movsb
+    
+    mov cl, contador
+    mov ch, 0
+    mov ax, tam_calif + 1
+    mul cx
+    mov cx, ax
+    mov si, offset lista_califs
+    mov di, offset buffer_califs_ordenados
+    rep movsb
+    
+    ; SEGUNDO: REORDENAR COPIANDO DEL BUFFER AL ORIGINAL
+    mov cl, contador
+    mov ch, 0
+    mov si, 0                ; SI = índice para array_BS
+    
+reordenar:
+    mov bx, [array_BS + si]  ; BX = índice original
+    and bx, 00FFh            ; Asegurar 8 bits
+    
+    ; === COPIAR NOMBRE ===
+    ; DI = destino en lista original
+    mov ax, si               ; AX = posición en array_BS
+    shr ax, 1                ; AX = nueva posición (0, 1, 2...)
+    mov dl, tam_nombre + 1
+    mul dl
+    mov di, ax
+    add di, offset lista_nombres
+    
+    ; Calcular origen en buffer (usar DX como temporal)
+    mov ax, bx               ; AX = índice original
+    mov dl, tam_nombre + 1
+    mul dl
+    mov temp_reg, ax         ; Usar variable temporal
+    mov dx, temp_reg
+    add dx, offset buffer_nombres_ordenados
+    mov source_ptr, dx       ; Guardar en variable
+    
+    ; Copiar nombre
+    push cx
+    push si
+    mov cx, tam_nombre + 1
+    mov si, source_ptr       ; SI = origen desde variable
+    rep movsb                ; BUFFER -> ORIGINAL
+    pop si
+    pop cx
+    
+    ; === COPIAR CALIFICACIÓN ===
+    ; DI = destino en lista original
+    mov ax, si               ; AX = posición en array_BS
+    shr ax, 1                ; AX = nueva posición
+    mov dl, tam_calif + 1
+    mul dl
+    mov di, ax
+    add di, offset lista_califs
+    
+    ; Calcular origen en buffer (usar DX como temporal)
+    mov ax, bx               ; AX = índice original
+    mov dl, tam_calif + 1
+    mul dl
+    mov temp_reg, ax         ; Usar variable temporal
+    mov dx, temp_reg
+    add dx, offset buffer_califs_ordenados
+    mov source_ptr, dx       ; Guardar en variable
+    
+    ; Copiar calificación
+    push cx
+    push si
+    mov cx, tam_calif + 1
+    mov si, source_ptr       ; SI = origen desde variable
+    rep movsb                ; BUFFER -> ORIGINAL
+    pop si
+    pop cx
+    
+    add si, 2                ; Siguiente en array_BS
+    loop reordenar
+    
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+ordenarListas ENDP
+
+generar_Max_Min PROC   
+    mov al, orden
+    cmp al, 1
+    je  desc
+    cmp al, 0
+    je  asce 
+    RET
+
+generar_Max_Min ENDP
+
+desc:
+    ;Datos organizados de forma descendente
+    
+    ;Primer dato es el maximo
+    mov ah, 9
+    lea dx, msgMaxNota
+    int 21h
+    
+    mov al, contador
+    dec al
+    CALL MostarPorID 
+    
+    ;Ultimo dato es el minimo
+    mov ah, 9
+    lea dx, msgMinNota
+    int 21h
+    
+    mov al, 1
+    dec al
+    CALL MostarPorID 
+    RET
+asce:
+    ;Datos organizados de forma ascendente 
+    
+    ;Primer dato es el minimo 
+    mov ah, 9
+    lea dx, msgMinNota
+    int 21h
+    
+    mov al, contador
+    dec al
+    CALL MostarPorID 
+    
+    ;Ultimo dato es el maximo
+    mov ah, 9
+    lea dx, msgMaxNota
+    int 21h
+    
+    mov al, 1  
+    dec al
+    CALL MostarPorID
+    RET
+
+COMPARE_DECIMALES PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+
+    ; -------------------------
+    ; Obtener índices desde array_BS
+    ; -------------------------
+    mov ax, array_BS[si]      ; índice i
+    mov bx, array_BS[si+2]    ; índice j
+
+    ; -------------------------
+    ; Calcular offset decimal[i]
+    ; -------------------------
+    mov dx, ax        ; dx = i
+    shl dx, 1
+    shl dx, 1         ; dx = i*4
+    mov di, dx        ; di = offset de decimal[i]
+
+    mov cx, array_decimales[di]      ; parte baja
+    mov dx, array_decimales[di+2]    ; parte alta
+
+    ; -------------------------
+    ; Calcular offset decimal[j]
+    ; -------------------------
+    mov bx, bx        ; bx = j
+    shl bx, 1
+    shl bx, 1         ; bx = j*4 ? offset j
+
+    mov si, array_decimales[bx]      ; parte baja
+    mov bp, array_decimales[bx+2]    ; parte alta
+
+    ; -------------------------
+    ; Comparar parte alta
+    ; -------------------------
+    cmp dx, bp
+    ja  DEC_MAYOR
+    jb  DEC_MENOR
+
+    ; Si iguales, comparar parte baja
+    cmp cx, si
+    ja  DEC_MAYOR
+    jb  DEC_MENOR
+
+    ; Iguales
+    mov resultado_dec, 2
+    jmp FIN_COMPARE
+
+DEC_MAYOR:
+    mov resultado_dec, 0
+    jmp FIN_COMPARE
+
+DEC_MENOR:
+    mov resultado_dec, 1
+
+FIN_COMPARE:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+COMPARE_DECIMALES ENDP
+
+
 
 END START
