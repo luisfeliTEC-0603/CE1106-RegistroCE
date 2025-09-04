@@ -38,7 +38,13 @@ array_decimales DW max_estudiantes * 2 dup(0)                   ; Parte fraccion
 temp_entero     DW 0                                            ; Almacena temporalmente la parte entera durante el parsing. 
 temp_decimal    DW 2 dup(0)                                     ; Almacena temporalmente la parte decimal durante el parsing.
 flag_decimal    DB 0                                            ; Flag al encontrar el punto decimal. 
-temp_index DB 0  
+temp_index DB 0
+
+
+; Variables para promedio
+suma_total      DW 0
+promedio_ponderado DW 0
+  
 ; Contadores de aprobaciones
 contador_aprobados      DB 0
 contador_desaprobados   DB 0  
@@ -85,6 +91,7 @@ msgPorcReprobados   DB 13, 10, 'Porcentaje de reprobados: $'
 msgMaxNota          DB 13, 10, 'El estudiante con mayor nota es: $'
 msgMinNota          DB 13, 10, 'El estudiante con menor nota es: $'
 msgMaxMin           DB 13, 10, 'Se presentaran datos de notas mayores y menores en orden de ID, Nombre y Nota.$'
+msgPonderado        DB 13, 10, 'Promedio ponderado: $' ;(mostrar el mensaje de ponderado)
 ; Mensajes [3]
 msgT3               DB 13, 10, '[ BUSQUEDA POR ID ]', 13, 10, '$'
 msgPedirID          DB 13, 10, 'Ingrese el ID del estudiante: $'
@@ -188,6 +195,7 @@ Opcion2:
     CALL ordenarListas     
 
     CALL MostrarEstadisticas
+    
                             
     MOV AH, 09h
     LEA DX, msgMaxMin
@@ -845,7 +853,8 @@ MostrarEstadisticas PROC
     INT 21h
 
 MostrarStats:
-    CALL calcular_porcentajes
+    CALL calcular_porcentajes 
+    CALL calcular_ponderado 
     RET
 
 MostrarEstadisticas ENDP 
@@ -1558,9 +1567,8 @@ COMPARE_DECIMALES PROC
     shl dx, 1         ; dx = i*4
     mov di, dx        ; di = offset de decimal[i]
 
-    mov cx, array_decimales[di]      ; parte baja
+    mov cx, array_decimales[di]      ; parte baja 
     mov dx, array_decimales[di+2]    ; parte alta
-
     ; -------------------------
     ; Calcular offset decimal[j]
     ; -------------------------
@@ -1570,7 +1578,7 @@ COMPARE_DECIMALES PROC
 
     mov si, array_decimales[bx]      ; parte baja
     mov bp, array_decimales[bx+2]    ; parte alta
-
+                                                   
     ; -------------------------
     ; Comparar parte alta
     ; -------------------------
@@ -1603,5 +1611,93 @@ FIN_COMPARE:
     pop ax
     ret
 COMPARE_DECIMALES ENDP
+
+
+; --------------------------------------
+; Calcular Promedio
+; --------------------------------------
+calcular_ponderado PROC
+    MOV CL, contador
+    CMP CL, 0
+    JE fin_calculo_ponderado
+    
+    XOR SI, SI              ; Reiniciar índice
+    XOR AX, AX              ; Reiniciar acumulador
+    MOV suma_total, 0
+    
+ciclo_suma:
+    MOV BX, array_enteros[SI] ; Obtener calificación entera
+    ADD AX, BX              ; Sumar al acumulador
+    ADD SI, 2               ; Siguiente elemento
+    LOOP ciclo_suma
+    
+    MOV suma_total, AX      ; Guardar suma total
+    
+    ; Calcular promedio (suma_total / número_estudiantes)
+    XOR DX, DX
+    MOV BX, 0
+    MOV BL, contador
+    DIV BX                  ; AX = suma_total / contador
+    MOV promedio_ponderado, AX
+    
+    ; Mostrar resultado
+    MOV AH, 09h
+    LEA DX, msgPonderado
+    INT 21h
+    
+    MOV AX, promedio_ponderado
+    CALL print_promedio    
+    
+fin_calculo_ponderado:
+    RET
+calcular_ponderado ENDP 
+
+;--------------------
+; Printear numero
+;--------------------
+print_promedio PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+
+    MOV CX, 0          ; contador de dígitos
+    MOV BX, 10         ; divisor para decimal
+
+    ; Caso especial: si AX = 0, imprimir '0'
+    CMP AX, 0
+    JNE conv_loop_sin
+    MOV DL, '0'
+    MOV AH, 02h
+    INT 21h
+    JMP fin_print_sin
+
+conv_loop_sin:
+    XOR DX, DX
+    DIV BX            ; AX / 10 ? cociente en AL, residuo en AH 
+    PUSH DX           ; guardar residuo (dígito)
+    INC CX
+    CMP AX, 0
+    JNE conv_loop_sin
+
+print_digit_sin:
+    POP DX
+    ADD DL, '0'       ; convertir dígito a ASCII
+    MOV AH, 02h
+    INT 21h
+    LOOP print_digit_sin
+
+fin_print_sin:
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+print_promedio ENDP
+
+
+
+
+
 
 END START
