@@ -38,8 +38,10 @@ array_decimales DW max_estudiantes * 2 dup(0)                   ; Parte fraccion
 temp_entero     DW 0                                            ; Almacena temporalmente la parte entera durante el parsing. 
 temp_decimal    DW 2 dup(0)                                     ; Almacena temporalmente la parte decimal durante el parsing.
 flag_decimal    DB 0                                            ; Flag al encontrar el punto decimal. 
-temp_index DB 0
-
+temp_index      DB 0
+promedio_decim          DW  2 DUP(0) 
+residuo_promedio        DW  2 DUP(0)
+suma_promedio_deciamles DW  2 DUP(0)
 
 ; Variables para promedio
 suma_total      DW 0
@@ -385,32 +387,34 @@ FormatoCalif PROC                                                   ; Se asegura
     
     LEA SI, buffer_calif+2
     XOR DI, DI
-    XOR BX, BX
-    XOR CX, CX
-    MOV DX, 10
+    XOR BX, BX                                                       ; Contador digitos decimales.
+    XOR CX, CX                                                       ; Contador digitos enteros.
+    MOV DX, 10 
     
 ValidarLoop:
     MOV AL, [SI]
     
-    ; ValidaciÃ³n de caracteres espaciales y pasar a formatear.
+    ; Validación de caracteres espaciales y pasar a formatear.
     CMP AL, '$'
-    JE  IniciarFormato
+    JE  VerificarEnteros
     CMP AL, 13
-    JE  IniciarFormato
+    JE  VerificarEnteros
     CMP AL, '.'
     JE  PuntoValido
     
-    ; ValidaciÃ³n de dÃ­gitos.
+    ; Validación de dígitos.
     CMP AL, '0'
     JL  ErrorFormato
     CMP AL, '9'
     JG  ErrorFormato
     
-    ; VerificaciÃ³n de parte decimal (mÃ¡ximo 5 digitos).
-    CMP DI, 1
-    JNE SaltarValidacion
-    
-    ; Contador decimal.
+    CMP DI, 0
+    JNE ContarFracc
+    INC CX
+    JMP SaltarValidacion
+
+; Verificación de parte decimal (máximo 5 digitos).
+ContarFracc:
     INC BX
     CMP BX, 5
     JG ErrorFormato
@@ -419,6 +423,14 @@ ValidarLoop:
 SaltarValidacion:
     INC SI
     JMP ValidarLoop
+
+; Determina si el número ingresado cuenta con parte entera. 
+VerificarEnteros:
+    CMP CX, 0
+    JE  ErrorFormato
+    
+    ; Continuar con el formateo normal
+    JMP IniciarFormato
 
 ; Determina inicio de parte decimal y error si multiples puntos.
 PuntoValido:
@@ -854,7 +866,11 @@ MostrarEstadisticas PROC
 
 MostrarStats:
     CALL calcular_porcentajes 
-    CALL calcular_ponderado 
+    CALL calcular_ponderado
+    CALL promedio_decimales
+    CALL suma_de_decimales
+    CALL ajustar_suma_decimales
+    CALL imprimir_promedio 
     RET
 
 MostrarEstadisticas ENDP 
@@ -864,7 +880,11 @@ FinEstadisticas:
     LEA DX, msgContinuar
     INT 21h
     MOV AH, 01h
-    INT 21h 
+    INT 21h
+    
+    ; Reinicia Variables de Promedio
+    CALL reiniciar_variables
+     
     RET
 
 ; ---< Ordenar Calificaciones >---
@@ -1640,64 +1660,343 @@ ciclo_suma:
     DIV BX                  ; AX = suma_total / contador
     MOV promedio_ponderado, AX
     
+    ; Calcular 5 decimales a partir del residuo
+    CALL calcular_decimales
+    
     ; Mostrar resultado
     MOV AH, 09h
     LEA DX, msgPonderado
     INT 21h
     
-    MOV AX, promedio_ponderado
-    CALL print_promedio    
+    MOV AX, promedio_ponderado    
     
 fin_calculo_ponderado:
     RET
 calcular_ponderado ENDP 
 
-;--------------------
-; Printear numero
-;--------------------
-print_promedio PROC
+
+;------------------------
+; Promedio Decimales
+;------------------------
+
+promedio_decimales PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+
+    ; Verificar si hay elementos
+    mov cl, contador
+    cmp cl, 0
+    je FIN_PROM
+
+    ; Inicializar acumulador de 32 bits en DX:AX = 0
+    xor ax, ax
+    xor dx, dx
+    mov si, 0
+
+SUM_LOOP:
+    ; Sumar parte baja (low word)
+    add ax, [array_decimales + si]
+    
+    ; Sumar parte alta (high word) + acarreo
+    adc dx, [array_decimales + si + 2]
+
+    add si, 4              ; siguiente número (4 bytes)
+    loop SUM_LOOP
+
+    ; Ahora en DX:AX está la suma de 32 bits
+    ; Para dividir DX:AX entre contador (que es de 8/16 bits)
+    
+    ; Mover el divisor a CX
+    mov cx, 0
+    mov cl, contador
+    
+    ; Guardar la suma en BX:DI temporalmente
+    mov bx, dx      ; parte alta
+    mov di, ax      ; parte baja
+    
+    ; Dividir parte alta primero
+    mov ax, bx      ; mover parte alta a AX
+    xor dx, dx      ; limpiar DX
+    div cx          ; AX = DX:AX / CX, DX = resto
+    
+    ; Guardar cociente alto
+    mov bx, ax      ; BX = cociente de la parte alta
+    
+    ; Dividir parte baja con el resto
+    mov ax, di      ; mover parte baja a AX
+    ; DX ya contiene el resto de la división anterior
+    div cx          ; AX = DX:AX / CX, DX = resto
+    
+    ; Ahora tenemos:
+    ; BX = cociente alto (parte alta del promedio)
+    ; AX = cociente bajo (parte baja del promedio)
+    ; DX = resto
+    
+    ; Guardar promedio en promedio_decim
+    mov [promedio_decim], ax       ; parte baja
+    mov [promedio_decim + 2], bx   ; parte alta
+
+FIN_PROM:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+promedio_decimales ENDP  
+
+;------------------------------------
+; Calcule Residuo de Promedio Entero
+;------------------------------------
+
+calcular_decimales PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+
+    ; Inicializar
+    mov si, dx          ; SI = residuo original
+    mov cx, 5           ; 5 decimales
+    xor ax, ax          ; AX = acumulador bajo
+    xor dx, dx          ; DX = acumulador alto
+
+CALCULO_LOOP:
+    ; Multiplicar residuo por 10
+    mov bx, si
+    mov si, 10
+    mov ax, bx
+    mul si              ; DX:AX = residuo * 10
+    mov si, ax          ; Guardar nuevo residuo (parte baja)
+
+    ; Dividir entre contador
+    mov bl, contador
+    xor bh, bh
+    div bx              ; AX = cociente, DX = residuo
+
+    ; Actualizar residuo para siguiente iteración
+    mov si, dx
+
+    ; Multiplicar acumulador por 10 y sumar nuevo decimal
+    push ax             ; Guardar nuevo decimal
+    mov ax, [residuo_promedio]
+    mov bx, [residuo_promedio + 2]
+    mov di, 10
+    mul di              ; DX:AX = acumulador_bajo * 10
+    mov [residuo_promedio], ax
+    mov [residuo_promedio + 2], dx
+    
+    pop ax              ; Recuperar nuevo decimal
+    add [residuo_promedio], ax
+    adc [residuo_promedio + 2], 0
+
+    loop CALCULO_LOOP
+
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+calcular_decimales ENDP 
+
+
+;------------------------------------------------------------------
+; Sume Residuo de Promedio de Enteros con Promedio de Decimales
+;------------------------------------------------------------------
+
+suma_de_decimales PROC
+    ; Sumar la parte baja (16 bits menos significativos)
+    mov ax, WORD PTR [promedio_decim]      ; Cargar parte baja de promedio_decim
+    mov bx, WORD PTR [residuo_promedio]    ; Cargar parte baja de residuo_promedio
+    add ax, bx                             ; Sumar partes bajas
+    mov WORD PTR [suma_promedio_deciamles], ax  ; Guardar resultado parte baja
+    
+    ; Sumar la parte alta (16 bits más significativos) con acarreo
+    mov ax, WORD PTR [promedio_decim + 2]      ; Cargar parte alta de promedio_decim
+    mov bx, WORD PTR [residuo_promedio + 2]    ; Cargar parte alta de residuo_promedio
+    adc ax, bx                             ; Sumar partes altas con acarreo
+    mov WORD PTR [suma_promedio_deciamles + 2], ax  ; Guardar resultado parte alta
+    
+    ret
+suma_de_decimales ENDP
+
+
+
+
+;--------------------------------
+; Ajuste de Decimales
+;--------------------------------
+ajustar_suma_decimales PROC
+    ; Comparar con 100,000 (186A0h en hexadecimal)
+    ; 100,000 = 000186A0h (32 bits)
+    
+    ; Primero comparar la parte alta
+    mov ax, WORD PTR [suma_promedio_deciamles + 2]  ; Parte alta
+    cmp ax, 0001h                    ; Comparar con 0001h (parte alta de 100,000)
+    jb fin_ajuste                    ; Si parte alta < 0001h, es menor que 100,000
+    ja hacer_ajuste                  ; Si parte alta > 0001h, es mayor que 100,000
+    
+    ; Si parte alta es igual a 0001h, comparar parte baja
+    mov ax, WORD PTR [suma_promedio_deciamles]      ; Parte baja
+    cmp ax, 86A0h                    ; Comparar con 86A0h (parte baja de 100,000)
+    jb fin_ajuste                    ; Si parte baja < 86A0h, es menor que 100,000
+    
+hacer_ajuste:
+    ; Restar 100,000 (000186A0h) a suma_promedio_decimales
+    mov ax, WORD PTR [suma_promedio_deciamles]      ; Parte baja
+    sub ax, 86A0h                    ; Restar parte baja de 100,000
+    mov WORD PTR [suma_promedio_deciamles], ax      ; Guardar nueva parte baja
+    
+    mov ax, WORD PTR [suma_promedio_deciamles + 2]  ; Parte alta
+    sbb ax, 0001h                    ; Restar parte alta de 100,000 con borrow
+    mov WORD PTR [suma_promedio_deciamles + 2], ax  ; Guardar nueva parte alta
+    
+    ; Sumar 1 a promedio_ponderado (asumiendo que es variable de 16 bits)
+    inc promedio_ponderado           ; Incrementar promedio_ponderado en 1
+    
+fin_ajuste:
+    ret
+ajustar_suma_decimales ENDP 
+
+
+
+;---------------------------
+; Imprimir Promedio
+;---------------------------
+imprimir_promedio PROC
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
+    PUSH SI
 
-    MOV CX, 0          ; contador de dígitos
-    MOV BX, 10         ; divisor para decimal
+    ; Imprimir parte entera
+    MOV AX, promedio_ponderado
+    CALL imprimir_numero
 
-    ; Caso especial: si AX = 0, imprimir '0'
-    CMP AX, 0
-    JNE conv_loop_sin
-    MOV DL, '0'
+    ; Imprimir punto decimal
     MOV AH, 02h
+    MOV DL, '.'
     INT 21h
-    JMP fin_print_sin
 
-conv_loop_sin:
-    XOR DX, DX
-    DIV BX            ; AX / 10 ? cociente en AL, residuo en AH 
-    PUSH DX           ; guardar residuo (dígito)
-    INC CX
-    CMP AX, 0
-    JNE conv_loop_sin
+    ; Imprimir parte decimal (5 dígitos fijos)
+    CALL imprimir_decimales
 
-print_digit_sin:
-    POP DX
-    ADD DL, '0'       ; convertir dígito a ASCII
-    MOV AH, 02h
-    INT 21h
-    LOOP print_digit_sin
-
-fin_print_sin:
+    POP SI
     POP DX
     POP CX
     POP BX
     POP AX
     RET
-print_promedio ENDP
+imprimir_promedio ENDP               
 
+;--------------------------------
+; Imprime la parte Entera de Promedio
+;--------------------------------
+imprimir_numero PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
 
+    MOV CX, 0       ; Contador de dígitos
+    MOV BX, 10      ; Divisor
 
+    ; Si el número es 0, imprimir '0' directamente
+    CMP AX, 0
+    JNE convertir_digitos
+    MOV AH, 02h
+    MOV DL, '0'
+    INT 21h
+    JMP fin_imprimir
 
+convertir_digitos:
+    XOR DX, DX      ; Limpiar DX para la división
+    DIV BX          ; AX = AX/10, DX = resto
+    PUSH DX         ; Guardar dígito
+    INC CX          ; Incrementar contador
+
+    CMP AX, 0
+    JNE convertir_digitos
+
+imprimir_digitos:
+    POP DX          ; Recuperar dígito
+    ADD DL, '0'     ; Convertir a ASCII
+    MOV AH, 02h
+    INT 21h
+    LOOP imprimir_digitos
+
+fin_imprimir:
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+imprimir_numero ENDP
+
+;-----------------------------------
+; Impimir Parte decimal de promedio
+;-----------------------------------
+imprimir_decimales PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+
+    MOV AX, suma_promedio_deciamles  ; parte decimal (0..99999)
+
+    MOV CX, 5       ; siempre 5 dígitos
+siguiente_digito:
+    XOR DX, DX
+    MOV BX, 10
+    DIV BX          ; AX / 10 -> cociente en AX, resto en DX
+    PUSH DX         ; guardar dígito
+    LOOP siguiente_digito
+
+    MOV CX, 5
+mostrar_digito:
+    POP DX
+    ADD DL, '0'
+    MOV AH, 02h
+    INT 21h
+    LOOP mostrar_digito
+
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+imprimir_decimales ENDP     
+
+;-----------------------------------
+; Reiniciar Variables de Promedio
+;-----------------------------------
+
+reiniciar_variables PROC
+    ; Reiniciar promedio_decim (4 bytes = 2 palabras)
+    MOV WORD PTR [promedio_decim], 0
+    MOV WORD PTR [promedio_decim + 2], 0
+    
+    ; Reiniciar residuo_promedio (4 bytes = 2 palabras)
+    MOV WORD PTR [residuo_promedio], 0
+    MOV WORD PTR [residuo_promedio + 2], 0
+    
+    ; Reiniciar suma_promedio_deciamles (4 bytes = 2 palabras)
+    MOV WORD PTR [suma_promedio_deciamles], 0
+    MOV WORD PTR [suma_promedio_deciamles + 2], 0
+    
+    ; Reiniciar promedio_ponderado (2 bytes = 1 palabra)
+    MOV WORD PTR [promedio_ponderado], 0
+    
+    RET
+reiniciar_variables ENDP
 
 
 END START
