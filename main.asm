@@ -387,32 +387,34 @@ FormatoCalif PROC                                                   ; Se asegura
     
     LEA SI, buffer_calif+2
     XOR DI, DI
-    XOR BX, BX
-    XOR CX, CX
-    MOV DX, 10
+    XOR BX, BX                                                       ; Contador digitos decimales.
+    XOR CX, CX                                                       ; Contador digitos enteros.
+    MOV DX, 10 
     
 ValidarLoop:
     MOV AL, [SI]
     
-    ; ValidaciÃ³n de caracteres espaciales y pasar a formatear.
+    ; Validación de caracteres espaciales y pasar a formatear.
     CMP AL, '$'
-    JE  IniciarFormato
+    JE  VerificarEnteros
     CMP AL, 13
-    JE  IniciarFormato
+    JE  VerificarEnteros
     CMP AL, '.'
     JE  PuntoValido
     
-    ; ValidaciÃ³n de dÃ­gitos.
+    ; Validación de dígitos.
     CMP AL, '0'
     JL  ErrorFormato
     CMP AL, '9'
     JG  ErrorFormato
     
-    ; VerificaciÃ³n de parte decimal (mÃ¡ximo 5 digitos).
-    CMP DI, 1
-    JNE SaltarValidacion
-    
-    ; Contador decimal.
+    CMP DI, 0
+    JNE ContarFracc
+    INC CX
+    JMP SaltarValidacion
+
+; Verificación de parte decimal (máximo 5 digitos).
+ContarFracc:
     INC BX
     CMP BX, 5
     JG ErrorFormato
@@ -421,6 +423,14 @@ ValidarLoop:
 SaltarValidacion:
     INC SI
     JMP ValidarLoop
+
+; Determina si el número ingresado cuenta con parte entera. 
+VerificarEnteros:
+    CMP CX, 0
+    JE  ErrorFormato
+    
+    ; Continuar con el formateo normal
+    JMP IniciarFormato
 
 ; Determina inicio de parte decimal y error si multiples puntos.
 PuntoValido:
