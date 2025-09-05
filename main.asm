@@ -870,7 +870,11 @@ FinEstadisticas:
     LEA DX, msgContinuar
     INT 21h
     MOV AH, 01h
-    INT 21h 
+    INT 21h
+    
+    ; Reinicia Variables de Promedio
+    CALL reiniciar_variables
+     
     RET
 
 ; ---< Ordenar Calificaciones >---
@@ -1927,9 +1931,9 @@ fin_imprimir:
     RET
 imprimir_numero ENDP
 
-;--------------------------------
+;-----------------------------------
 ; Impimir Parte decimal de promedio
-;--------------------------------
+;-----------------------------------
 imprimir_decimales PROC
     PUSH AX
     PUSH BX
@@ -1959,7 +1963,30 @@ mostrar_digito:
     POP BX
     POP AX
     RET
-imprimir_decimales ENDP
+imprimir_decimales ENDP     
+
+;-----------------------------------
+; Reiniciar Variables de Promedio
+;-----------------------------------
+
+reiniciar_variables PROC
+    ; Reiniciar promedio_decim (4 bytes = 2 palabras)
+    MOV WORD PTR [promedio_decim], 0
+    MOV WORD PTR [promedio_decim + 2], 0
+    
+    ; Reiniciar residuo_promedio (4 bytes = 2 palabras)
+    MOV WORD PTR [residuo_promedio], 0
+    MOV WORD PTR [residuo_promedio + 2], 0
+    
+    ; Reiniciar suma_promedio_deciamles (4 bytes = 2 palabras)
+    MOV WORD PTR [suma_promedio_deciamles], 0
+    MOV WORD PTR [suma_promedio_deciamles + 2], 0
+    
+    ; Reiniciar promedio_ponderado (2 bytes = 1 palabra)
+    MOV WORD PTR [promedio_ponderado], 0
+    
+    RET
+reiniciar_variables ENDP
 
 
 END START
