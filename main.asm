@@ -1404,47 +1404,71 @@ generar_Max_Min PROC
 generar_Max_Min ENDP
 
 desc:
-    ;Datos organizados de forma descendente
+    ; Datos organizados de forma descendente
     
-    ;Primer dato es el maximo
-    mov ah, 9
-    lea dx, msgMaxNota
-    int 21h
-    
-    mov al, contador
-    dec al
-    CALL MostarPorID 
-    
-    ;Ultimo dato es el minimo
+    ; Primer dato es el MIN
     mov ah, 9
     lea dx, msgMinNota
     int 21h
-    
-    mov al, 1
-    dec al
-    CALL MostarPorID 
-    RET
+
+    ; array_BS[0] = máximo
+    mov ax, array_BS[0]
+    call MostarPorID
+
+    ; Salto de línea
+    mov ah, 2
+    mov dl, 0Dh
+    int 21h
+    mov dl, 0Ah
+    int 21h
+
+    ; Ultimo dato es el MAX
+    mov ah, 9             
+    lea dx, msgMaxNota
+    int 21h
+
+    mov cl, contador
+    dec cl                ; índice del último
+    mov si, cx
+    shl si, 1             ; multiplicar por 2 porque son WORD
+    mov ax, array_BS[si]
+    call MostarPorID
+
+    ret
+
+; ----------------------------------------------
 asce:
-    ;Datos organizados de forma ascendente 
+    ; Datos organizados de forma ascendente 
     
-    ;Primer dato es el minimo 
-    mov ah, 9
-    lea dx, msgMinNota
-    int 21h
-    
-    mov al, contador
-    dec al
-    CALL MostarPorID 
-    
-    ;Ultimo dato es el maximo
+    ; Primer dato es el MAX
     mov ah, 9
     lea dx, msgMaxNota
     int 21h
-    
-    mov al, 1  
-    dec al
-    CALL MostarPorID
-    RET
+
+    ; array_BS[0] = mínimo
+    mov ax, array_BS[0]
+    call MostarPorID
+
+    ; Salto de línea
+    mov ah, 2
+    mov dl, 0Dh
+    int 21h
+    mov dl, 0Ah
+    int 21h
+
+    ; Ultimo dato es el MIN
+    mov ah, 9
+    lea dx, msgMinNota  
+    int 21h
+
+    mov cl, contador
+    dec cl                ; índice del último
+    mov si, cx
+    shl si, 1             ; multiplicar por 2 porque son WORD
+    mov ax, array_BS[si]
+    call MostarPorID
+
+    ret
 
 ;----------------------------------------
 ; Compara decimales                                          
@@ -1836,7 +1860,7 @@ imprimir_decimales PROC
     PUSH CX
     PUSH DX
 
-    MOV AX, suma_promedio_deciamles  ; parte decimal (0..99999)
+    MOV AX, suma_promedio_deciamles  ; parte decimal (0.99999)
 
     MOV CX, 5       ; siempre 5 dígitos
 siguiente_digito:
@@ -1885,7 +1909,7 @@ reiniciar_variables PROC
 reiniciar_variables ENDP
 
 ;-------------------------------
-; Mostrar ID segu orden
+; Mostrar ID segun orden
 ;-------------------------------
 
 MostrarListaMejores PROC
