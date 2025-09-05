@@ -192,9 +192,7 @@ Opcion2:
     MOV CX, max_estudiantes   ; cantidad de elementos  
     
     ; array_BS almacena orden.
-    CALL BUBBLE_SORT_INDICES
-    
-    CALL ordenarListas     
+    CALL BUBBLE_SORT_INDICES    
 
     CALL MostrarEstadisticas
     
@@ -227,13 +225,12 @@ Opcion4:
     
     ; array_BS almacena orden.
     CALL BUBBLE_SORT_INDICES
-    
-    CALL ordenarListas 
-    CALL MostrarListaCompleta
-        
      
-    RET
-
+    CALL MostrarListaMejores
+    
+    
+    JMP FinMostrar  
+         
 Opcion5:
     CALL MostrarListaCompleta
     RET
@@ -1389,118 +1386,7 @@ ERROR_INPUT:
 
 FIN_PREGUNTA:
     ret
-PREGUNTAR_ORDEN ENDP   
-
-
-;---------------------------------
-; ordenarListas 
-;---------------------------------
-ordenarListas PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push es
-    
-    push ds
-    pop es                   ; ES = DS
-    
-    ; PRIMERO: COPIAR TODO A BUFFERS (respaldo)
-    mov cl, contador
-    mov ch, 0
-    mov ax, tam_nombre + 1
-    mul cx                                ; AX contiene (tama駉 + 1) * contador
-    mov cx, ax
-    mov si, offset lista_nombres           ; Source index inicia en la lista de nombres
-    mov di, offset buffer_nombres_ordenados; Destination index inicia en buffer de nombres ordenados
-    rep movsb  ; Cambio de bloques de memoria.
-    
-    mov cl, contador
-    mov ch, 0
-    mov ax, tam_calif + 1
-    mul cx                                 ; AX contiene (tama駉 + 1) * contador
-    mov cx, ax
-    mov si, offset lista_califs
-    mov di, offset buffer_califs_ordenados
-    rep movsb
-    
-    ; SEGUNDO: REORDENAR COPIANDO DEL BUFFER AL ORIGINAL
-    mov cl, contador
-    mov ch, 0
-    mov si, 0                ; SI = 铆ndice para array_BS
-    
-reordenar:
-    mov bx, [array_BS + si]  ; BX = 铆ndice original
-    and bx, 00FFh            ; Asegurar 8 bits
-    
-    ; === COPIAR NOMBRE ===
-    ; DI = destino en lista original
-    mov ax, si               ; AX = posici贸n en array_BS
-    shr ax, 1                ; AX = nueva posici贸n (0, 1, 2...)
-    mov dl, tam_nombre + 1
-    mul dl
-    mov di, ax
-    add di, offset lista_nombres
-    
-    ; Calcular origen en buffer (usar DX como temporal)
-    mov ax, bx               ; AX = 铆ndice original
-    mov dl, tam_nombre + 1
-    mul dl
-    mov temp_reg, ax         ; Usar variable temporal
-    mov dx, temp_reg
-    add dx, offset buffer_nombres_ordenados
-    mov source_ptr, dx       ; Guardar en variable
-    
-    ; Copiar nombre
-    push cx
-    push si
-    mov cx, tam_nombre + 1
-    mov si, source_ptr       ; SI = origen desde variable
-    rep movsb                ; BUFFER -> ORIGINAL
-    pop si
-    pop cx
-    
-    ; === COPIAR CALIFICACI脫N ===
-    ; DI = destino en lista original
-    mov ax, si               ; AX = posici贸n en array_BS
-    shr ax, 1                ; AX = nueva posici贸n
-    mov dl, tam_calif + 1
-    mul dl
-    mov di, ax
-    add di, offset lista_califs
-    
-    ; Calcular origen en buffer (usar DX como temporal)
-    mov ax, bx               ; AX = 铆ndice original
-    mov dl, tam_calif + 1
-    mul dl
-    mov temp_reg, ax         ; Usar variable temporal
-    mov dx, temp_reg
-    add dx, offset buffer_califs_ordenados
-    mov source_ptr, dx       ; Guardar en variable
-    
-    ; Copiar calificaci贸n
-    push cx
-    push si
-    mov cx, tam_calif + 1
-    mov si, source_ptr       ; SI = origen desde variable
-    rep movsb                ; BUFFER -> ORIGINAL
-    pop si
-    pop cx
-    
-    add si, 2                ; Siguiente en array_BS
-    loop reordenar
-    
-    pop es
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-ordenarListas ENDP 
+PREGUNTAR_ORDEN ENDP    
 
 
 ;------------------------------------
@@ -1997,6 +1883,66 @@ reiniciar_variables PROC
     
     RET
 reiniciar_variables ENDP
+
+;-------------------------------
+; Mostrar ID segu orden
+;-------------------------------
+
+MostrarListaMejores PROC
+    push ax
+    push bx
+    push cx
+    push si
+    
+    ; Imprimir salto de l韓ea
+    mov ah, 2
+    mov dl, 0Dh           ; CR
+    int 21h
+    mov dl, 0Ah           ; LF
+    int 21h
+    
+    ; Encabezado
+    MOV AH, 09h
+    LEA DX, msgEncabezado
+    INT 21h
+    LEA DX, nueva_linea
+    INT 21h
+    
+    ; Imprimir salto de l韓ea
+    mov ah, 2
+    mov dl, 0Dh           ; CR
+    int 21h
+    mov dl, 0Ah           ; LF
+    int 21h
+    
+    mov cl, contador      ; n鷐ero de elementos (8 bits)
+    cmp cl, 0
+    je FIN_MLM            ; si no hay datos, salir
+
+    xor si, si            ; 韓dice en array_BS (en bytes)
+BUCLE_MLM:
+    mov ax, array_BS[si]  ; obtener valor (16 bits)
+    mov al, al            ; si solo quieres la parte baja
+                          ; (de lo contrario, p醩alo en AX)
+    call MostarPorID     ; llamar a funci髇 con AL
+
+    ; Imprimir salto de l韓ea
+    mov ah, 2
+    mov dl, 0Dh           ; CR
+    int 21h
+    mov dl, 0Ah           ; LF
+    int 21h
+
+    add si, 2             ; siguiente palabra
+    loop BUCLE_MLM
+
+FIN_MLM:
+    pop si
+    pop cx
+    pop bx
+    pop ax
+    ret
+MostrarListaMejores ENDP
 
 
 END START
