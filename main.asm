@@ -94,6 +94,8 @@ msgMaxNota          DB 13, 10, 'El estudiante con mayor nota es: $'
 msgMinNota          DB 13, 10, 'El estudiante con menor nota es: $'
 msgMaxMin           DB 13, 10, 'Se presentaran datos de notas mayores y menores en orden de ID, Nombre y Nota.$'
 msgPonderado        DB 13, 10, 'Promedio ponderado: $' ;(mostrar el mensaje de ponderado)
+msgCantidadApr      DB 13, 10, 'Cantidad Esutdiantes Aprobados: $'
+msgCantidadRep      DB 13, 10, 'Cantidad Esutdiantes Reprobados: $'
 ; Mensajes [3]
 msgT3               DB 13, 10, '[ BUSQUEDA POR ID ]', 13, 10, '$'
 msgPedirID          DB 13, 10, 'Ingrese el ID del estudiante: $'
@@ -1148,45 +1150,105 @@ siguiente:
     dec cl
     jmp ciclo_notas
 
+
 fin_ciclo:
 
-    ; ------------------------------
-    ; porcentaje contador_aprobados = (contador_aprobados * 100) / contador
-    ; ------------------------------
-    xor ax, ax        ; LIMPIAR AX COMPLETAMENTE
-    mov al, contador_aprobados ; cargar contador_aprobados (8 bits)
-    mov bl, 100
-    mul bl            ; AX = contador_aprobados * 100
-    mov bl, contador       ; divisor
-    div bl            ; AL = cociente, AH = residuo
-    xor ah, ah        ; descartar residuo, AX = porcentaje
-    push ax           ; guardar porcentaje
-
-    ; imprimir mensaje de contador_aprobados
+    ; ==============================
+    ; Cantidad de aprobados
+    ; ==============================
     mov ah, 9
-    lea dx, msgPorcAprobados
+    lea dx, msgCantidadApr      ; "Cantidad de aprobados: "
     int 21h
-    pop ax
-    call print_num    ; imprimir porcentaje
 
-    ; ------------------------------
-    ; porcentaje reprobados = (contador_desaprobados * 100) / contador
-    ; ------------------------------
-    xor ax, ax        ; LIMPIAR AX COMPLETAMENTE - ESTO ES LO QUE FALtabuladorA
-    mov al, contador_desaprobados ; cargar contador_desaprobados (8 bits)
+    mov al, contador_aprobados  ; cargar cantidad
+    xor ah, ah
+    call print_num              ; imprimir cantidad
+
+    ; salto de línea
+    mov ah, 2
+    mov dl, 0Dh
+    int 21h
+    mov dl, 0Ah
+    int 21h
+
+    ; ==============================
+    ; Porcentaje de aprobados
+    ; ==============================
+    xor ax, ax
+    mov al, contador_aprobados
     mov bl, 100
-    mul bl            ; AX = contador_desaprobados * 100
-    mov bl, contador       ; divisor
-    div bl            ; AL = cociente, AH = residuo
-    xor ah, ah        ; descartar residuo, AX = porcentaje
+    mul bl                      ; AX = contador_aprobados * 100
+    mov bl, contador
+    div bl                      ; AL = cociente, AH = residuo
+    xor ah, ah                  ; limpiar residuo
+    push ax
 
-    ; imprimir mensaje de reprobados
-    push ax           ; guardar porcentaje temporalmente
     mov ah, 9
-    lea dx, msgPorcReprobados
+    lea dx, msgPorcAprobados    ; "Porcentaje aprobados: "
     int 21h
+
     pop ax
     call print_num
+
+    mov dl, '%'
+    mov ah, 2
+    int 21h
+
+    ; salto de línea
+    mov ah, 2
+    mov dl, 0Dh
+    int 21h
+    mov dl, 0Ah
+    int 21h
+
+
+    ; ==============================
+    ; Cantidad de reprobados
+    ; ==============================
+    mov ah, 9
+    lea dx, msgCantidadRep      ; "Cantidad de reprobados: "
+    int 21h
+
+    mov al, contador_desaprobados
+    xor ah, ah
+    call print_num
+
+    ; salto de línea
+    mov ah, 2
+    mov dl, 0Dh
+    int 21h
+    mov dl, 0Ah
+    int 21h
+
+    ; ==============================
+    ; Porcentaje de reprobados
+    ; ==============================
+    xor ax, ax
+    mov al, contador_desaprobados
+    mov bl, 100
+    mul bl                      ; AX = contador_desaprobados * 100
+    mov bl, contador
+    div bl
+    xor ah, ah
+    push ax
+
+    mov ah, 9
+    lea dx, msgPorcReprobados   ; "Porcentaje reprobados: "
+    int 21h
+
+    pop ax
+    call print_num
+
+    mov dl, '%'
+    mov ah, 2
+    int 21h
+
+    ; salto final
+    mov ah, 2
+    mov dl, 0Dh
+    int 21h
+    mov dl, 0Ah
+    int 21h
 
     ret
 calcular_porcentajes endp
@@ -1227,10 +1289,6 @@ print_digits:
     loop print_digits
 
 print_symbol:
-    ; imprimir simbolo de porcentaje
-    mov dl, '%'
-    mov ah, 2
-    int 21h
 
     pop dx
     pop cx
@@ -1854,22 +1912,32 @@ imprimir_numero ENDP
 ;-----------------------------------
 ; Impimir Parte decimal de promedio
 ;-----------------------------------
+;-----------------------------------
+; Imprimir parte decimal (5 dígitos)
+;-----------------------------------
 imprimir_decimales PROC
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
 
-    MOV AX, suma_promedio_deciamles  ; parte decimal (0.99999)
-
-    MOV CX, 5       ; siempre 5 dígitos
+    MOV CX, 5                   ; siempre 5 dígitos
 siguiente_digito:
-    XOR DX, DX
+    ; cargar número de 32 bits en DX:AX
+    MOV AX, [suma_promedio_deciamles]       ; parte baja
+    MOV DX, [suma_promedio_deciamles+2]     ; parte alta
+
     MOV BX, 10
-    DIV BX          ; AX / 10 -> cociente en AX, resto en DX
-    PUSH DX         ; guardar dígito
+    DIV BX                      ; (DX:AX) / BX -> cociente en AX, residuo en DX
+
+    ; guardar cociente en variable de 32 bits
+    MOV [suma_promedio_deciamles], AX
+    MOV [suma_promedio_deciamles+2], 0      ; (simple si cabe en 16 bits)
+
+    PUSH DX                     ; guardar dígito
     LOOP siguiente_digito
 
+    ; imprimir los dígitos en orden correcto
     MOV CX, 5
 mostrar_digito:
     POP DX
@@ -1883,7 +1951,8 @@ mostrar_digito:
     POP BX
     POP AX
     RET
-imprimir_decimales ENDP     
+imprimir_decimales ENDP
+
 
 ;-----------------------------------
 ; Reiniciar Variables de Promedio
